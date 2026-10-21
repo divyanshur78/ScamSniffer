@@ -218,3 +218,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# ScamSniffer --- generated artefacts
+models/*.joblib
+reports/*.png
+reports/*.json

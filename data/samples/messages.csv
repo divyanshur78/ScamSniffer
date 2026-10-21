@@ -1,0 +1,121 @@
+text,type,label
+"Hi Alice, just checking in to see how you are doing this week.",email,0
+"Meeting rescheduled to Thursday at 2pm. Please update your calendar.",email,0
+"Your Amazon order #112-3456789 has shipped and will arrive Tuesday.",email,0
+"Please review the attached quarterly report before Monday's meeting.",email,0
+"Hi, your library book 'Clean Code' is due back on Friday.",email,0
+"Reminder: team standup is at 9am tomorrow. See you then.",chat,0
+"The pull request has been approved and merged into main.",chat,0
+"Can you send me the slides from yesterday's presentation?",chat,0
+"Your package was delivered to the front door at 3:14pm.",sms,0
+"Flight AA123 departs at 07:45. Check-in opens 2 hours before.",sms,0
+"Dinner reservation confirmed for Saturday 7pm at The Oak Room.",sms,0
+"Your prescription is ready for collection at the pharmacy.",sms,0
+"New blog post: 10 tips for writing clean Python code.",email,0
+"Your gym membership renewal is due next month.",email,0
+"Congratulations on your work anniversary! Five years today.",chat,0
+"The server deployment completed successfully with no errors.",chat,0
+"Your interview is confirmed for Monday at 10am via Zoom.",email,0
+"Budget proposal approved. Finance will process it this week.",email,0
+"Low battery warning: your UPS is on backup power.",sms,0
+"Road closure on Main St until 6pm due to water main repair.",sms,0
+"Your dentist appointment is confirmed for next Wednesday at 3pm.",sms,0
+"Please complete the onboarding survey by end of week.",email,0
+"The conference call has been moved to 4pm. Dial-in details unchanged.",email,0
+"Your wi-fi password has been updated. Check the router label.",chat,0
+"Code review requested on PR #142 — please take a look when you can.",chat,0
+"Your parcel is out for delivery today between 10am and 2pm.",sms,0
+"Team lunch is at noon on Friday. RSVP by Thursday.",email,0
+"The project milestone was approved by the client this afternoon.",chat,0
+"Your subscription to the newsletter has been confirmed.",email,0
+"Your boarding pass for flight BA456 is ready. Have a great trip!",sms,0
+"Reminder: performance review forms are due by end of month.",email,0
+"Your electricity bill for March is now available to view online.",email,0
+"Meeting notes from today's session have been shared in the team folder.",chat,0
+"Patch deployed successfully to production. No downtime observed.",chat,0
+"Your library card has been renewed for another year.",sms,0
+"The API documentation update has been published to the dev portal.",chat,0
+"Your parking permit expires on June 30. Renew at the council office.",sms,0
+"Please find attached the agenda for next week's strategy session.",email,0
+"Deployment pipeline passed all checks. Ready for review.",chat,0
+"Your pet's vaccination is due next month. Book with your vet.",sms,0
+"Volunteer shift confirmed for Saturday 10am at the community centre.",sms,0
+"Q1 sales figures attached. Please review before the board meeting.",email,0
+"Your broadband engineer visit is booked for Tuesday between 8am-1pm.",sms,0
+"Build 2.3.1 has been tagged and pushed to the release branch.",chat,0
+"Your driving licence renewal application has been received.",email,0
+"The new expense policy takes effect from next Monday.",email,0
+"Reminder: submit your timesheet by 5pm Friday.",email,0
+"Your health check results are normal. No follow-up needed.",sms,0
+"Database backup completed at 02:00 UTC with no errors.",chat,0
+"Annual fire safety training is scheduled for next Thursday.",email,0
+"Charity run registration confirmed! See you at the start line.",sms,0
+"Your council tax direct debit has been updated successfully.",email,0
+"The roadmap has been shared — leave comments by EOD Friday.",chat,0
+"Monthly infrastructure cost report attached for your review.",email,0
+"Your National Insurance number reminder letter is in the post.",email,0
+"New version 3.1 of the SDK is now available on npm.",chat,0
+"Your car service is booked for Thursday at 8:30am.",sms,0
+"The sprint review is on Friday at 3pm. Demos to run: 4.",chat,0
+"Scheduled maintenance complete. All systems back online.",chat,0
+"Your online banking statement for April is now available.",email,0
+"URGENT: Your account has been suspended! Verify your password immediately or lose access forever!",email,1
+"Click here to claim your prize: http://free-winner.xyz/claim?id=99 You have won $1000!",sms,1
+"Your PayPal account is locked. Confirm your credentials now: http://paypal-secure.tk/login",email,1
+"ALERT: Suspicious login detected. Verify your bank account details immediately to avoid suspension.",email,1
+"Dear customer, your invoice is overdue. Wire payment to avoid account termination: http://pay-now.ml/invoice",email,1
+"You have won the lottery! Claim your $5000 prize now. Send your bank account number to collect.",sms,1
+"CRITICAL: Your Apple ID will be terminated in 24 hours. Sign in now: http://apple-id-locked.ga/unlock",sms,1
+"Security alert: unusual activity on your account. Reset your password here: http://secure-update.cf/reset",email,1
+"Your Microsoft account is at risk! Provide your username and password to our support team ASAP.",chat,1
+"Final notice: your credit card has been suspended. Call now or confirm details at http://card-verify.gq/",email,1
+"Action required: verify your social security number and date of birth to restore service.",email,1
+"You have a pending refund of $499. Confirm your debit card details to receive it within 24 hours.",sms,1
+"Limited time offer: send us your OTP and bank account credentials to double your money instantly!",sms,1
+"Warning: your eBay account will be locked. Log in and confirm your credentials: http://ebay-login.pw/signin",email,1
+"URGENT: Wire $500 in Bitcoin to this wallet or your files will be encrypted. Do not ignore this alert.",email,1
+"Your two-factor authentication has expired. Provide your security code now to avoid account locked.",chat,1
+"Invoice overdue: payment of $1200 required immediately. Transfer funds or face account termination.",email,1
+"Congratulations! You have been selected for a $2500 cashback reward. Click here to claim your gift card.",sms,1
+"Your bank account has been restricted. Confirm your PIN and account number at http://banking-alert.su/",email,1
+"Respond now: your wallet recovery phrase is needed to restore access. Do not ignore this critical alert.",chat,1
+"Your Netflix subscription has been cancelled due to failed payment. Verify your card now: http://netfix-billing.tk/pay",email,1
+"IMPORTANT: We detected unusual sign-in activity. Confirm your identity or your Google account will be locked.",email,1
+"Congratulations, you have been chosen for a $10000 grant! Provide your bank details to receive funds.",sms,1
+"Your Amazon Prime membership has been suspended. Update billing: http://amaz0n-prime-verify.xyz/billing",sms,1
+"Security warning: someone tried to access your Dropbox. Verify now or your files will be deleted.",email,1
+"Final demand: pay £350 to avoid legal action. Transfer to account 12345678 within 24 hours.",sms,1
+"Your iCloud account will be terminated. Confirm your Apple ID credentials here immediately.",chat,1
+"ALERT: Your eBay seller account has been restricted. Call us or lose your seller status forever.",email,1
+"Act now: your Chase bank card is blocked. Unblock it by verifying your details at http://chase-verify.club/",sms,1
+"Your Facebook account will be permanently disabled. Confirm your identity to prevent this action.",chat,1
+"Send your credit card details to claim your $750 refund before it expires tonight at midnight.",sms,1
+"We have detected fraudulent activity on your PayPal. Provide your password and PIN immediately.",email,1
+"Your HSBC account needs verification. Log in and confirm your sort code and account number now.",email,1
+"DHL delivery failed. Pay £2.99 customs fee now to release your parcel: http://dh1-customs.site/pay",sms,1
+"Your tax refund of $820 is ready to claim. Submit your bank account details at http://irs-refund.pw/claim",email,1
+"NOTICE: You owe overdue utility bills. Pay immediately or face disconnection and legal proceedings.",email,1
+"Your Spotify account has been hacked. Change your password now by clicking: http://sp0tify-secure.ml/reset",sms,1
+"Verify your LinkedIn account within 24 hours or it will be permanently removed from our system.",email,1
+"You have a $1500 crypto reward waiting. Send your wallet address and private key to claim it now.",chat,1
+"Your salary payment failed. Provide your bank account and routing number to reprocess immediately.",email,1
+"Last chance: your reward of $300 expires tonight. Click to collect: http://reward-claim.cc/collect?id=55",sms,1
+"WARNING: malware detected on your device. Call our support line immediately and provide remote access.",chat,1
+"Your UPS delivery requires a customs payment. Pay now: http://ups-customs-alert.xyz/pay?parcel=abc",sms,1
+"ACCOUNT LOCKED: verify your username, password, and date of birth to unlock your online banking now.",email,1
+"You have been selected to receive a free iPhone 15. Confirm your address and card details to claim.",sms,1
+"Your session has expired due to suspicious activity. Re-enter your credentials at http://session-verify.su/",chat,1
+"Exclusive deal: invest $200 and receive $2000 in 48 hours. Send funds to wallet: 1A2B3C4D5E6F.",sms,1
+"Microsoft Technical Support: your computer is sending errors. Call now and allow remote access.",chat,1
+"Your TSB account will be closed. Provide full account details to the following number to prevent closure.",sms,1
+"CONGRATULATIONS! You won a holiday to Maldives. Reply with your passport number and home address.",sms,1
+"Your card ending 4321 was used for a $99 purchase. If not you, click here: http://card-dispute.pw/cancel",email,1
+"Please send your two-factor authentication code to our security team to confirm your identity.",chat,1
+"Your tax return is incomplete. Submit your national insurance number and date of birth immediately.",email,1
+"BREAKING: earn $500/day from home. Send £50 registration fee to unlock your earning account now.",sms,1
+"Dear user, your account is under review. Provide your full name, address, and card number to proceed.",email,1
+"Act fast — your digital wallet has been locked. Transfer $1 to verify your identity and regain access.",sms,1
+"Your Twitch account has been flagged. Verify your email and password immediately to avoid a ban.",chat,1
+"Your parcel delivery address needs confirmation. Update now: http://parcel-verify.live/confirm?ref=XY",sms,1
+"URGENT: ransomware has been detected. Pay $500 in cryptocurrency within 12 hours to unlock your files.",email,1
+"Please confirm your NHS number and GP details to receive your COVID booster appointment link.",sms,1

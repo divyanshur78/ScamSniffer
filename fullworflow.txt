@@ -1,0 +1,171 @@
+The repository is a clean slate — just a stub `README.md` and a Python `.gitignore`. Here is the full picture.
+
+---
+
+## 📁 Existing Repository State
+
+| Path | Contents |
+|---|---|
+| [`README.md`](README.md) | One-line stub: *"AI-powered phishing detection…"* |
+| [`.gitignore`](.gitignore) | Standard Python `.gitignore` (pip, venv, pytest, Streamlit secrets, Ruff, etc.) |
+| `.git/` | Initialized repo on branch `main`, remote `origin` present |
+
+No source code, no dependencies, no tests, no data.
+
+---
+
+## 🏗️ Proposed Architecture
+
+```mermaid
+graph TD
+    A[Streamlit UI<br/>app/main.py] --> B[Detector Facade<br/>src/detector.py]
+    B --> C[URL Analyzer<br/>src/url_analyzer.py]
+    B --> D[Text Classifier<br/>src/text_classifier.py]
+    B --> E[Input Validator<br/>src/validator.py]
+    C --> F[Feature Extractor<br/>src/features/url_features.py]
+    D --> G[Feature Extractor<br/>src/features/text_features.py]
+    F --> H[ML Pipeline<br/>src/models/pipeline.py]
+    G --> H
+    H --> I[Trained Model<br/>models/*.joblib]
+    H --> J[Evaluator<br/>src/evaluation.py]
+    J --> K[Reports & Plots<br/>reports/]
+    L[Training Script<br/>scripts/train.py] --> H
+    M[Sample Data<br/>data/] --> L
+    N[Unit Tests<br/>tests/] --> B
+    N --> C
+    N --> D
+    N --> E
+```
+
+---
+
+## 📂 Proposed Directory Layout
+
+```
+ScamSniffer/
+├── app/
+│   └── main.py                  # Streamlit entry point
+├── src/
+│   ├── __init__.py
+│   ├── detector.py              # Unified facade: routes URL / email / SMS / chat
+│   ├── validator.py             # Input sanitisation & type validation
+│   ├── evaluation.py            # Precision, recall, F1, confusion matrix
+│   ├── features/
+│   │   ├── __init__.py
+│   │   ├── url_features.py      # URL heuristics: TLD, entropy, length, suspicious keywords
+│   │   └── text_features.py     # TF-IDF, char n-grams, length stats for text inputs
+│   └── models/
+│       ├── __init__.py
+│       └── pipeline.py          # sklearn Pipeline: vectoriser → scaler → classifier
+├── scripts/
+│   └── train.py                 # CLI: load data, train, evaluate, persist model
+├── data/
+│   ├── README.md                # Data provenance notes
+│   └── samples/
+│       ├── urls.csv             # Labelled URL dataset (phishing=1, legit=0)
+│       └── messages.csv         # Labelled email/SMS/chat dataset
+├── models/                      # Persisted .joblib artefacts (git-ignored)
+├── reports/                     # Evaluation plots & JSON metrics (git-ignored)
+├── tests/
+│   ├── __init__.py
+│   ├── test_url_features.py
+│   ├── test_text_features.py
+│   ├── test_validator.py
+│   ├── test_detector.py
+│   └── test_evaluation.py
+├── docs/
+│   ├── architecture.md
+│   ├── usage.md
+│   └── data_sources.md
+├── requirements.txt
+├── requirements-dev.txt
+├── pyproject.toml               # Project metadata + tool config (pytest, ruff)
+└── README.md                    # Full project README (replaces stub)
+```
+
+---
+
+## 📦 Dependencies
+
+**`requirements.txt` — runtime**
+
+| Package | Purpose |
+|---|---|
+| `scikit-learn` | ML pipelines, TF-IDF, Random Forest / Logistic Regression, metrics |
+| `pandas` | Data loading and manipulation |
+| `numpy` | Numerical operations |
+| `joblib` | Model serialisation |
+| `streamlit` | Web UI |
+| `tldextract` | Reliable TLD/domain extraction from URLs |
+| `validators` | URL and email syntax validation |
+
+**`requirements-dev.txt` — development only**
+
+| Package | Purpose |
+|---|---|
+| `pytest` | Test runner |
+| `pytest-cov` | Coverage reporting |
+| `ruff` | Linting and formatting |
+
+---
+
+## 🧠 ML Design Decisions
+
+### URL detection (`url_features.py`)
+Extracts a numeric feature vector per URL:
+- Domain length, path length, query-string length
+- Subdomain depth and count of dots
+- Character entropy of the domain (high entropy → likely generated)
+- Presence of IP address as hostname
+- Count of suspicious keywords (`login`, `verify`, `secure`, `account`, `update`, `bank`, etc.)
+- Use of non-standard ports (`:8080`, `:4443`)
+- HTTPS vs HTTP flag
+- TLD in known-bad list (`.xyz`, `.tk`, `.top`, `.gq`, …)
+
+Classifier: **Random Forest** — handles mixed numeric features without scaling, interpretable feature importances.
+
+### Text detection (`text_features.py`)
+Extracts features from email/SMS/chat bodies:
+- TF-IDF on word unigrams + bigrams (top 5 000 features)
+- Character n-gram TF-IDF (2–4 grams, top 3 000) to catch obfuscation
+- Message length, ratio of uppercase chars, count of URLs in body, count of exclamation marks
+
+Classifier: **Logistic Regression** — fast, probabilistic output (confidence score), strong baseline for text.
+
+### Training pipeline (`pipeline.py`)
+- `sklearn.pipeline.Pipeline` chains feature union → classifier
+- 80/20 stratified train/test split
+- Hyperparameter grid search via `GridSearchCV`
+- Persisted with `joblib.dump`
+
+---
+
+## ✅ Implementation Steps
+
+```
+Step 1  Project scaffold         pyproject.toml, requirements*.txt, src/__init__.py, data/README.md
+Step 2  Input validator          src/validator.py + tests/test_validator.py
+Step 3  URL feature extractor    src/features/url_features.py + tests/test_url_features.py
+Step 4  Text feature extractor   src/features/text_features.py + tests/test_text_features.py
+Step 5  ML pipeline              src/models/pipeline.py
+Step 6  Training script          scripts/train.py  (loads CSVs, trains, evaluates, saves)
+Step 7  Evaluator                src/evaluation.py + tests/test_evaluation.py
+Step 8  Detector facade          src/detector.py + tests/test_detector.py
+Step 9  Sample data              data/samples/urls.csv & messages.csv  (small synthetic set for CI)
+Step 10 Streamlit UI             app/main.py  (tabs: URL / Email / SMS / Chat, warnings, confidence)
+Step 11 Tests & coverage         pytest --cov; ensure all modules have passing unit tests
+Step 12 Documentation            docs/ files + full README.md replacement
+```
+
+---
+
+## 🔒 Safety & Disclaimer Design
+
+Every prediction surface will carry a **non-guaranteeing disclaimer** ("This tool is intended to assist, not replace, expert judgement. Predictions may be incorrect."). Input validation will:
+- Strip/reject oversized inputs (URL > 2 083 chars, message > 10 000 chars)
+- Reject non-string types and null inputs with a descriptive error, never a traceback
+- Never execute, fetch, or resolve any URL submitted by the user
+
+---
+
+Ready to proceed with implementation? I'll work through the 12 steps in order and run the test suite at the end.

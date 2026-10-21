@@ -1,0 +1,2 @@
+# Trained model artefacts are stored here and are excluded from version control.
+# Add your trained .joblib files after running scripts/train.py
