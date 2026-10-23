@@ -1,21 +1,3 @@
-"""
-app/main.py
-===========
-ScamSniffer — Streamlit web interface.
-
-Run with:
-    streamlit run app/main.py
-
-Design principles:
-- All analysis is done by src.detector.Detector; the UI only handles
-  display logic, no classification logic lives here.
-- No URL is ever fetched, opened, or resolved.
-- Every result page repeats the disclaimer returned by the detector.
-- Stack traces are never shown to the user; errors are shown as friendly
-  messages instead.
-- Models are loaded once per session using st.cache_resource to avoid
-  reloading on every interaction.
-"""
 
 from __future__ import annotations
 
@@ -24,20 +6,12 @@ from pathlib import Path
 
 import streamlit as st
 
-# ---------------------------------------------------------------------------
-# Make sure the project root is importable regardless of how the app is
-# launched (e.g., `streamlit run app/main.py` from any working directory).
-# ---------------------------------------------------------------------------
 _APP_DIR  = Path(__file__).resolve().parent
 _ROOT_DIR = _APP_DIR.parent
 if str(_ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(_ROOT_DIR))
 
-from src.detector import Detector, DetectionResult, InputType, ModelNotReadyError  # noqa: E402
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+from src.detector import DetectionResult, Detector, InputType, ModelNotReadyError  # noqa: E402
 
 _MODEL_DIR = _ROOT_DIR / "models"
 
@@ -62,38 +36,23 @@ _HELP = {
     "chat":  "Paste the chat message.",
 }
 
-# ---------------------------------------------------------------------------
-# Cached model loader — loaded once per Streamlit session
-# ---------------------------------------------------------------------------
+
 
 @st.cache_resource(show_spinner="Loading detection models...")
 def _load_detector() -> Detector | None:
-    """
-    Load the Detector once and cache it for the session lifetime.
 
-    Returns None if models have not been trained yet, so the UI can show
-    a friendly setup message instead of an exception.
-    """
     try:
         return Detector(model_dir=_MODEL_DIR)
-    except ModelNotReadyError as exc:
+    except ModelNotReadyError:
         return None
     except Exception:
         return None
 
 
-# ---------------------------------------------------------------------------
-# Result rendering helpers
-# ---------------------------------------------------------------------------
-
 def _render_result(result: DetectionResult) -> None:
-    """Render a DetectionResult as a structured Streamlit block."""
-
     verdict      = getattr(result, "verdict", None)
     phishing_pct = result.phishing_prob * 100
-    legit_pct    = (1.0 - result.phishing_prob) * 100
 
-    # --- Three-tier verdict banner ---
     if verdict == "Potentially phishing":
         st.error(
             f"**⚠️ Potentially phishing / scam**  "
@@ -112,19 +71,55 @@ def _render_result(result: DetectionResult) -> None:
             icon="ℹ️",
         )
     else:
-        # Fallback for legacy results or "Unable to assess"
+
         label_str = "Likely phishing" if result.label == 1 else "Likely legitimate"
         color_fn  = st.error if result.label == 1 else st.success
         color_fn(
             f"**{label_str}**  (model confidence: {result.confidence * 100:.1f}%)",
         )
 
-    # --- Probability breakdown ---
     col1, col2 = st.columns(2)
-    col1.metric("Phishing probability", f"{phishing_pct:.1f}%")
-    col2.metric("Legitimate probability", f"{legit_pct:.1f}%")
+    col1.metric("ML phishing score", f"{phishing_pct:.1f}%")
+    col2.metric("Combined risk score", f"{getattr(result, 'combined_risk_score', 0.0):.1f}%")
 
-    # --- Warning indicators (independent of model score) ---
+    st.caption(
+        "ML phishing score is the model output. Combined risk score "
+        "also considers heuristic indicators; it is not a calibrated probability."
+    )
+
+
+    severity = getattr(result, "severity", "Unknown")
+    possible_types = getattr(result, "possible_types", [])
+    recommended_actions = getattr(result, "recommended_actions", [])
+
+    st.subheader("Risk Assessment", divider="orange")
+
+    if severity == "Critical":
+        st.error(f"Risk Severity: {severity}", icon="🚨")
+    elif severity == "High":
+        st.error(f"Risk Severity: {severity}", icon="⚠️")
+    elif severity == "Medium":
+        st.warning(f"Risk Severity: {severity}", icon="⚠️")
+    elif severity == "Low":
+        st.success(f"Risk Severity: {severity}", icon="✅")
+    else:
+        st.info("Risk Severity: Not assessed", icon="ℹ️")
+
+    st.markdown("**Possible Phishing Types**")
+    if possible_types:
+        for item in possible_types:
+            st.write(f"- {item}")
+    else:
+        st.write("No specific phishing pattern identified.")
+
+    st.markdown("**Recommended Actions**")
+    if recommended_actions:
+        for action in recommended_actions:
+            st.write(f"- {action}")
+    else:
+        st.write("- Verify the sender and destination independently.")
+
+
     if result.warnings:
         st.subheader("Risk indicators detected", divider="orange")
         st.caption(
@@ -139,27 +134,17 @@ def _render_result(result: DetectionResult) -> None:
             icon="ℹ️",
         )
 
-    # --- Disclaimer (always shown, as returned by the detector) ---
     st.caption(f"**Disclaimer:** {result.disclaimer}")
 
 
 def _render_model_not_ready() -> None:
-    """Show a clear, actionable message when models have not been trained."""
     st.error(
         "**Models not found.**  "
         "The detection models have not been trained yet.",
         icon="🔧",
     )
     st.markdown(
-        """
-To train the models, open a terminal in the project root and run:
 
-```bash
-python scripts/train.py --data-dir data/samples --output-dir models --report-dir reports
-```
-
-Then refresh this page.
-        """,
         unsafe_allow_html=False,
     )
 
@@ -170,7 +155,6 @@ def _render_tab(
     slug: str,
     detector: Detector | None,
 ) -> None:
-    """Render one analysis tab (URL, Email, SMS, or Chat)."""
 
     st.subheader(f"Analyse a {label}", divider="grey")
 
@@ -200,7 +184,6 @@ def _render_tab(
     if not analyse_clicked:
         return
 
-    # --- Input empty ---
     if not user_input or not user_input.strip():
         st.warning(
             f"Please enter a {label.lower()} to analyse.",
@@ -208,24 +191,20 @@ def _render_tab(
         )
         return
 
-    # --- Models not ready ---
     if detector is None:
         _render_model_not_ready()
         return
 
-    # --- Run detection ---
     with st.spinner("Analysing..."):
         try:
             result = detector.detect(user_input, input_type)
         except ValueError as exc:
-            # Input failed validation — show the message, not a traceback.
             st.error(
                 f"**Input validation error:** {exc}",
                 icon="🚫",
             )
             return
         except Exception:
-            # Unexpected error — never expose a traceback.
             st.error(
                 "An unexpected error occurred during analysis. "
                 "Please check your input and try again.",
@@ -236,26 +215,20 @@ def _render_tab(
     _render_result(result)
 
 
-# ---------------------------------------------------------------------------
-# Page layout
-# ---------------------------------------------------------------------------
-
 def main() -> None:
     st.set_page_config(
         page_title="ScamSniffer",
         page_icon="🔍",
-        layout="centered",
-        initial_sidebar_state="collapsed",
+        layout="wide",
+
     )
 
-    # --- Header ---
     st.title("🔍 ScamSniffer")
     st.markdown(
         "**AI-powered phishing and scam detection** for URLs, emails, "
         "SMS messages, and chat messages."
     )
 
-    # --- Top-level disclaimer banner ---
     st.warning(
         "**Important:** ScamSniffer is a research and educational tool. "
         "Predictions are probabilistic and **not guaranteed to be correct**. "
@@ -263,7 +236,6 @@ def main() -> None:
         icon="⚠️",
     )
 
-    # --- Model status ---
     detector = _load_detector()
 
     if detector is None:
@@ -273,7 +245,6 @@ def main() -> None:
     st.success("Detection models loaded.", icon="✅")
     st.divider()
 
-    # --- Tabs ---
     tab_labels = [cfg[0] for cfg in _TAB_CONFIG]
     tabs = st.tabs(tab_labels)
 
@@ -281,7 +252,6 @@ def main() -> None:
         with tab_widget:
             _render_tab(label, input_type, slug, detector)
 
-    # --- Footer ---
     st.divider()
     st.caption(
         "ScamSniffer is open-source and intended for educational purposes only. "

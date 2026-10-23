@@ -1,52 +1,3 @@
-"""
-tests/test_url_features.py
-==========================
-Unit tests for src/features/url_features.py.
-
-Coverage targets (original 12 features — all prior tests preserved):
-  - Feature dict shape and key completeness
-  - Ordinary (benign-looking) HTTPS URL
-  - Ordinary HTTP URL
-  - Suspicious URL with keywords, non-standard port, suspicious TLD
-  - IPv4 hostname
-  - IPv6 hostname (bracketed literal)
-  - Deep subdomain
-  - High-entropy domain name
-  - Non-standard port detection
-  - Suspicious TLD detection
-  - Suspicious keyword counting
-  - Malformed / bare URL rejection (via validator)
-  - Empty / whitespace / None / wrong-type rejection
-  - Boundary: URL exactly at max length
-
-Coverage targets (new 14 features):
-  - hostname_label_count
-  - path_depth
-  - has_at_in_authority
-  - has_encoded_chars
-  - has_redirect_param
-  - is_idn / punycode detection
-  - brand_min_edit_dist (Levenshtein to known brands)
-  - brand_in_subdomain
-  - has_digit_sub_in_domain
-  - has_hyphen_brand
-  - consecutive_digits
-  - has_userinfo
-  - path_has_brand
-  - tld_label_count
-
-Regression / adversarial tests:
-  - amaz0n.com typosquatting fires digit-substitution warning
-  - arnazon.com transposition fires low edit-distance signal
-  - amazon.attacker.com brand-in-subdomain fires
-  - paypal-secure.com hyphen-brand fires
-  - apple IDN (xn--) fires is_idn
-  - Open-redirect parameter fires has_redirect_param
-  - User-info trick fires has_at_in_authority AND has_userinfo
-  - Percent-encoded path fires has_encoded_chars
-  - Legitimate hard negatives: accounts.google.com, github.com/login,
-    amazon.com real product page — no false positives on legitimate signals
-"""
 
 from __future__ import annotations
 
@@ -55,30 +6,23 @@ import math
 import pytest
 
 from src.features.url_features import (
-    # internal helpers — tested in isolation
-    _shannon_entropy,
-    _is_ip_address,
-    _count_suspicious_keywords,
-    _levenshtein,
-    _brand_min_edit_distance,
+    _KNOWN_BRANDS,
     _brand_in_subdomain,
+    _brand_min_edit_distance,
+    _count_suspicious_keywords,
     _has_digit_substitution,
     _has_hyphen_brand,
-    _longest_consecutive_digits,
     _has_redirect_param,
     _has_userinfo,
+    _is_ip_address,
+    _levenshtein,
+    _longest_consecutive_digits,
     _path_has_brand,
+    _shannon_entropy,
     _tld_label_count,
-    # public API
     extract_url_features,
-    # constants referenced in tests
-    _KNOWN_BRANDS,
 )
 from src.validator import URL_MAX_LENGTH
-
-# ---------------------------------------------------------------------------
-# Expected feature keys — every result must contain exactly these.
-# ---------------------------------------------------------------------------
 
 ORIGINAL_KEYS = {
     "url_length",
@@ -113,16 +57,6 @@ NEW_KEYS = {
 }
 
 EXPECTED_KEYS = ORIGINAL_KEYS | NEW_KEYS
-
-
-# ===========================================================================
-# ── ORIGINAL TESTS (all 67 preserved without modification) ─────────────────
-# ===========================================================================
-
-# ---------------------------------------------------------------------------
-# Helper / internal function unit tests
-# ---------------------------------------------------------------------------
-
 
 class TestShannonEntropy:
     def test_empty_string_returns_zero(self):
@@ -383,11 +317,6 @@ class TestInvalidInputs:
             extract_url_features(long_url)
 
 
-# ===========================================================================
-# ── NEW TESTS: internal helper functions ───────────────────────────────────
-# ===========================================================================
-
-
 class TestLevenshtein:
     def test_identical_strings_is_zero(self):
         assert _levenshtein("amazon", "amazon") == 0
@@ -402,7 +331,6 @@ class TestLevenshtein:
         assert _levenshtein("amazons", "amazon") == 1
 
     def test_transposition_costs_two(self):
-        # Levenshtein (not Damerau-Levenshtein): ar→ra costs 2
         assert _levenshtein("arnazon", "amazon") == 2
 
     def test_empty_string_vs_other(self):
@@ -422,7 +350,6 @@ class TestBrandMinEditDistance:
         assert _brand_min_edit_distance("amazon") == 0.0
 
     def test_digit_substitution_close_to_brand(self):
-        # amaz0n → substituted → amazon: 1 edit away
         d = _brand_min_edit_distance("amaz0n")
         assert d <= 2.0
 
@@ -446,7 +373,6 @@ class TestBrandInSubdomainHelper:
         assert _brand_in_subdomain("amazon", "attacker") is True
 
     def test_brand_in_both_sub_and_domain_is_false(self):
-        # www.amazon.com → domain IS amazon; not a hijack
         assert _brand_in_subdomain("www", "amazon") is False
 
     def test_no_subdomain_is_false(self):
@@ -456,25 +382,20 @@ class TestBrandInSubdomainHelper:
         assert _brand_in_subdomain("www", "example") is False
 
     def test_partial_brand_match_in_subdomain(self):
-        # 'amazon-secure' contains 'amazon'
         assert _brand_in_subdomain("amazon-secure", "attacker") is True
 
 
 class TestHasDigitSubstitution:
     def test_amaz0n_flagged(self):
-        # '0' → 'o' → 'amazon': distance 0
         assert _has_digit_substitution("amaz0n") is True
 
     def test_paypa1_flagged(self):
-        # '1' → 'l' → 'paypal': distance 0
         assert _has_digit_substitution("paypa1") is True
 
     def test_real_amazon_not_flagged(self):
-        # no digits
         assert _has_digit_substitution("amazon") is False
 
     def test_office365_not_flagged(self):
-        # '365' substituted → 'obe' → not close to any brand
         assert _has_digit_substitution("office365") is False
 
     def test_numeric_only_domain_not_flagged(self):
@@ -492,7 +413,6 @@ class TestHasHyphenBrand:
         assert _has_hyphen_brand("amazon-login") is True
 
     def test_amazon_alone_not_flagged(self):
-        # No hyphen; the domain IS the brand
         assert _has_hyphen_brand("amazon") is False
 
     def test_example_not_flagged(self):
@@ -513,7 +433,7 @@ class TestLongestConsecutiveDigits:
         assert _longest_consecutive_digits("amaz0n") == 1
 
     def test_multi_digit_run(self):
-        assert _longest_consecutive_digits("xk3z9mq7") == 1  # each single
+        assert _longest_consecutive_digits("xk3z9mq7") == 1
 
     def test_four_digit_run(self):
         assert _longest_consecutive_digits("abc1234def") == 4
@@ -589,16 +509,9 @@ class TestTldLabelCount:
     def test_empty_is_zero(self):
         assert _tld_label_count("") == 0
 
-
-# ===========================================================================
-# ── NEW TESTS: extract_url_features new features ───────────────────────────
-# ===========================================================================
-
-
 class TestHostnameLabelCount:
     def test_bare_domain(self):
         f = extract_url_features("https://example.com")
-        # example.com → 2 labels
         assert f["hostname_label_count"] == 2
 
     def test_with_www(self):
@@ -611,7 +524,6 @@ class TestHostnameLabelCount:
 
     def test_ip_host_gives_four_labels(self):
         f = extract_url_features("http://192.168.0.1/page")
-        # IPv4: "192.168.0.1" splits into 4 parts on '.'
         assert f["hostname_label_count"] == 4
 
 
@@ -635,7 +547,6 @@ class TestHasAtInAuthority:
         assert f["has_at_in_authority"] == 0
 
     def test_at_sign_in_netloc(self):
-        # user@host pattern — urlparse handles this
         f = extract_url_features("http://user@example.com/page")
         assert f["has_at_in_authority"] == 1
 
@@ -678,7 +589,6 @@ class TestIsIdn:
         assert f["is_idn"] == 0
 
     def test_idn_punycode_detected(self):
-        # xn--pple-43d.com is an IDN (apple lookalike)
         f = extract_url_features("http://xn--pple-43d.com/account/login")
         assert f["is_idn"] == 1
 
@@ -705,9 +615,7 @@ class TestBrandMinEditDistFeature:
         assert f["brand_min_edit_dist"] >= 4.0
 
     def test_ip_host_edit_dist_is_numeric(self):
-        # tldextract extracts "168" as the domain label for 192.168.0.1,
-        # so the distance is not 99 — it is simply some positive number.
-        # We only assert the value is a non-negative float.
+
         f = extract_url_features("http://192.168.0.1/page")
         assert isinstance(f["brand_min_edit_dist"], float)
         assert f["brand_min_edit_dist"] >= 0.0
@@ -723,7 +631,6 @@ class TestBrandInSubdomainFeature:
         assert f["brand_in_subdomain"] == 1
 
     def test_real_amazon_com_not_flagged(self):
-        # brand IS the registered domain
         f = extract_url_features("https://www.amazon.com/page")
         assert f["brand_in_subdomain"] == 0
 
@@ -750,7 +657,6 @@ class TestHasDigitSubInDomainFeature:
         assert f["has_digit_sub_in_domain"] == 0
 
     def test_numeric_only_domain_not_flagged(self):
-        # '123' substituted → 'leb' → not close to any brand
         f = extract_url_features("https://123.example.com/")
         assert f["has_digit_sub_in_domain"] == 0
 
@@ -811,10 +717,7 @@ class TestPathHasBrandFeature:
         assert f["path_has_brand"] == 0
 
     def test_real_amazon_path_not_flagged_on_path_alone(self):
-        # /gp/help/customer is not a brand name in path sense
         f = extract_url_features("https://www.amazon.com/gp/help/customer")
-        # amazon IS in the domain, but the path /gp/help/customer doesn't
-        # contain a brand token — path_has_brand should be 0
         assert f["path_has_brand"] == 0
 
 
@@ -831,15 +734,7 @@ class TestTldLabelCountFeature:
         f = extract_url_features("http://192.168.0.1/page")
         assert f["tld_label_count"] == 0
 
-
-# ===========================================================================
-# ── REGRESSION / ADVERSARIAL TESTS ─────────────────────────────────────────
-# ===========================================================================
-
-
 class TestAmazOn0Regression:
-    """amaz0n.com must trigger heuristic signals even though it uses HTTPS
-    and .com TLD.  These tests check feature VALUES, not model output."""
 
     URL = "https://www.amaz0n.com/"
 
@@ -850,25 +745,22 @@ class TestAmazOn0Regression:
         assert self.f["has_digit_sub_in_domain"] == 1
 
     def test_edit_distance_small(self):
-        # amaz0n → amazon: distance ≤ 2
         assert self.f["brand_min_edit_dist"] <= 2.0
 
     def test_is_https_does_not_mask_other_signals(self):
-        # HTTPS = 1 but other signals still fire
         assert self.f["is_https"] == 1
         assert self.f["has_digit_sub_in_domain"] == 1
 
     def test_has_suspicious_tld_is_zero(self):
-        # .com is not suspicious — confirms the flag is NOT needed for detection
         assert self.f["has_suspicious_tld"] == 0
 
 
 class TestTyposquattingVariants:
     @pytest.mark.parametrize("url,expected_max_dist", [
-        ("https://amaz0n.com/login",     2),  # digit sub
-        ("https://arnazon.com/login",    3),  # transposition
-        ("https://amazoon.com/login",    2),  # insertion
-        ("https://amazn.com/login",      2),  # deletion
+        ("https://amaz0n.com/login",     2),
+        ("https://arnazon.com/login",    3),
+        ("https://amazoon.com/login",    2),
+        ("https://amazn.com/login",      2),
     ])
     def test_lookalike_has_small_edit_distance(self, url, expected_max_dist):
         f = extract_url_features(url)
@@ -888,14 +780,11 @@ class TestTyposquattingVariants:
         assert f["brand_in_subdomain"] == 1
 
     def test_idn_apple_lookalike(self):
-        # xn--pple-43d.com is a known IDN for apple-like domain
         f = extract_url_features("http://xn--pple-43d.com/account/login")
         assert f["is_idn"] == 1
 
 
 class TestLegitimateHardNegatives:
-    """Legitimate URLs must not produce excessive false-positive signals.
-    We check that no single heuristic creates a blanket false positive."""
 
     def test_google_signin_no_digit_sub(self):
         f = extract_url_features("https://accounts.google.com/signin/")
@@ -934,7 +823,6 @@ class TestLegitimateHardNegatives:
         assert f["has_redirect_param"] == 0
 
     def test_bbc_co_uk_tld_label_count(self):
-        # co.uk → 2 labels in TLD
         f = extract_url_features("https://www.bbc.co.uk/news/technology")
         assert f["tld_label_count"] == 2
 
@@ -948,7 +836,6 @@ class TestOpenRedirectPattern:
         f = extract_url_features(
             "https://accounts.google.com/ServiceLogin?continue=http://evil.com"
         )
-        # 'continue' is in _REDIRECT_PARAMS
         assert f["has_redirect_param"] == 1
 
     def test_redirect_uri_param(self):
@@ -960,7 +847,6 @@ class TestOpenRedirectPattern:
 
 class TestEncodedUrls:
     def test_encoded_brand_in_path_flagged(self):
-        # %61%6D%61%7A%6F%6E = 'amazon' encoded
         f = extract_url_features(
             "https://attacker.com/%61%6D%61%7A%6F%6E/signin"
         )

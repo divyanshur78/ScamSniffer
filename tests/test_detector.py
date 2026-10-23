@@ -1,32 +1,3 @@
-"""
-tests/test_detector.py
-=======================
-Unit tests for src/detector.py.
-
-Strategy
---------
-- A single shared Detector fixture is loaded from the real models/ artefacts
-  (the same ones produced by scripts/train.py).  This keeps tests fast and
-  avoids re-training inside the test suite.
-- Tests that must simulate a missing model use tmp_path fixtures.
-- No model metrics are asserted; only result *structure* and *types* are
-  verified, plus routing and input-validation behaviour.
-
-Coverage
---------
-  Detector construction           — valid dir, missing model file
-  InputType enum                  — all four values, case-insensitive, invalid
-  URL detection                   — benign URL, suspicious URL, invalid inputs
-  Email detection                 — benign, suspicious, invalid inputs
-  SMS detection                   — benign, suspicious
-  Chat detection                  — benign, suspicious
-  DetectionResult structure       — all fields present, correct types, bounds
-  Warning indicators              — URL-specific and text-specific flags fired
-  as_dict serialisation           — JSON-serialisable, required keys
-  ModelNotReadyError              — clear message on missing artefact
-  Convenience functions           — detect_url, detect_message smoke tests
-  No network access               — fetch-free even for http:// URLs
-"""
 
 from __future__ import annotations
 
@@ -36,34 +7,23 @@ from pathlib import Path
 import pytest
 
 from src.detector import (
-    Detector,
+    _DISCLAIMER,
     DetectionResult,
+    Detector,
     InputType,
     ModelNotReadyError,
-    _DISCLAIMER,
     _text_warnings,
     _url_warnings,
     detect_message,
     detect_url,
 )
 
-# ---------------------------------------------------------------------------
-# Shared fixture — load models once per test session
-# ---------------------------------------------------------------------------
-
 _MODEL_DIR = Path("models")
 
 
 @pytest.fixture(scope="session")
 def detector() -> Detector:
-    """Return a Detector loaded from the real saved artefacts."""
     return Detector(model_dir=_MODEL_DIR)
-
-
-# ===========================================================================
-# InputType enum
-# ===========================================================================
-
 
 class TestInputType:
     def test_url_value(self):
@@ -79,7 +39,6 @@ class TestInputType:
         assert InputType.CHAT.value == "chat"
 
     def test_case_insensitive_routing(self, detector):
-        # "URL", "url", "Url" all route correctly.
         r = detector.detect("https://example.com/page", "URL")
         assert r.input_type == "url"
 
@@ -88,18 +47,12 @@ class TestInputType:
             detector.detect("https://example.com", "fax")
 
 
-# ===========================================================================
-# Detector construction
-# ===========================================================================
-
-
 class TestDetectorConstruction:
     def test_loads_from_real_model_dir(self):
         d = Detector(model_dir=_MODEL_DIR)
         assert d is not None
 
     def test_missing_url_model_raises(self, tmp_path):
-        # Only text model present — url_model.joblib missing.
         import shutil
         shutil.copy(_MODEL_DIR / "text_model.joblib", tmp_path / "text_model.joblib")
         with pytest.raises(ModelNotReadyError, match="url_model.joblib"):
@@ -119,14 +72,7 @@ class TestDetectorConstruction:
         with pytest.raises(ModelNotReadyError, match="scripts/train.py"):
             Detector(model_dir=tmp_path)
 
-
-# ===========================================================================
-# DetectionResult structure
-# ===========================================================================
-
-
 class TestDetectionResultStructure:
-    """Verify every result has the correct fields, types, and value ranges."""
 
     _VALID_VERDICTS = {
         "Potentially phishing",
@@ -172,16 +118,10 @@ class TestDetectionResultStructure:
 
     def test_confidence_matches_predicted_class(self, detector):
         r = detector.detect("https://example.com/page", InputType.URL)
-        # confidence must be the probability of the *predicted* class.
         if r.label == 0:
             assert r.confidence == pytest.approx(1.0 - r.phishing_prob, abs=1e-4)
         else:
             assert r.confidence == pytest.approx(r.phishing_prob, abs=1e-4)
-
-
-# ===========================================================================
-# as_dict serialisation
-# ===========================================================================
 
 
 class TestAsDictSerialization:
@@ -209,14 +149,7 @@ class TestAsDictSerialization:
     def test_as_dict_confidence_rounded(self, detector):
         r = detector.detect("https://example.com", InputType.URL)
         d = r.as_dict()
-        # Rounded to 4 decimal places — no more than 4 digits after decimal.
         assert len(str(d["confidence"]).rstrip("0").split(".")[-1]) <= 4
-
-
-# ===========================================================================
-# URL detection
-# ===========================================================================
-
 
 class TestUrlDetection:
     def test_benign_url_returns_url_type(self, detector):
@@ -240,8 +173,6 @@ class TestUrlDetection:
         assert any("top-level domain" in w.lower() for w in r.warnings)
 
     def test_url_never_fetched(self, detector):
-        # The function must complete without any network call (it would raise
-        # or hang if it tried to connect).
         r = detector.detect("http://192.0.2.0/should-not-be-fetched", InputType.URL)
         assert r.input_type == "url"
 
@@ -260,12 +191,6 @@ class TestUrlDetection:
     def test_invalid_url_wrong_type_raises_valueerror(self, detector):
         with pytest.raises(ValueError):
             detector.detect(12345, InputType.URL)
-
-
-# ===========================================================================
-# Email detection
-# ===========================================================================
-
 
 class TestEmailDetection:
     def test_benign_email_returns_email_type(self, detector):
@@ -299,8 +224,12 @@ class TestEmailDetection:
         r = detector.detect(
             "You have won a prize! Claim your payment now.", InputType.EMAIL
         )
-        assert any("financial" in w.lower() or "prize" in w.lower() or "money" in w.lower() for w in r.warnings)
-
+        assert any(
+            "financial" in w.lower()
+            or "prize" in w.lower()
+            or "money" in w.lower()
+            for w in r.warnings
+        )
     def test_invalid_email_none_raises(self, detector):
         with pytest.raises(ValueError):
             detector.detect(None, InputType.EMAIL)
@@ -308,11 +237,6 @@ class TestEmailDetection:
     def test_invalid_email_empty_raises(self, detector):
         with pytest.raises(ValueError):
             detector.detect("", InputType.EMAIL)
-
-
-# ===========================================================================
-# SMS detection
-# ===========================================================================
 
 
 class TestSmsDetection:
@@ -333,12 +257,6 @@ class TestSmsDetection:
         )
         assert any("URL" in w for w in r.warnings)
 
-
-# ===========================================================================
-# Chat detection
-# ===========================================================================
-
-
 class TestChatDetection:
     def test_benign_chat_type(self, detector):
         r = detector.detect("The PR has been merged.", InputType.CHAT)
@@ -350,12 +268,6 @@ class TestChatDetection:
             InputType.CHAT,
         )
         assert any("credential" in w.lower() or "urgency" in w.lower() for w in r.warnings)
-
-
-# ===========================================================================
-# Warning generators (unit-tested in isolation)
-# ===========================================================================
-
 
 class TestUrlWarnings:
     def test_ip_host_warning(self):
@@ -429,12 +341,6 @@ class TestTextWarnings:
              "uppercase_ratio": 0.9, "exclamation_count": 0}
         ws = _text_warnings(f, "CLICK HERE NOW")
         assert any("uppercase" in w.lower() for w in ws)
-
-
-# ===========================================================================
-# Convenience functions
-# ===========================================================================
-
 
 class TestConvenienceFunctions:
     def test_detect_url_returns_result(self):

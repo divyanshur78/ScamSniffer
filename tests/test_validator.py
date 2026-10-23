@@ -1,14 +1,3 @@
-"""
-tests/test_validator.py
-=======================
-Unit tests for src/validator.py.
-
-Coverage targets:
-  validate_url  — valid inputs, scheme enforcement, empty/whitespace,
-                  wrong types, None, oversized
-  validate_message — valid inputs, empty/whitespace, wrong types,
-                     None, oversized, custom input_type label
-"""
 
 from __future__ import annotations
 
@@ -20,11 +9,6 @@ from src.validator import (
     validate_message,
     validate_url,
 )
-
-
-# ===========================================================================
-# validate_url — happy paths
-# ===========================================================================
 
 
 class TestValidateUrlValid:
@@ -40,7 +24,6 @@ class TestValidateUrlValid:
         assert validate_url("  https://example.com  ") == "https://example.com"
 
     def test_url_at_exact_max_length(self):
-        # Build a URL that is exactly URL_MAX_LENGTH characters long.
         base = "https://example.com/"
         padding = "a" * (URL_MAX_LENGTH - len(base))
         url = base + padding
@@ -49,17 +32,10 @@ class TestValidateUrlValid:
         assert result == url
 
     def test_uppercase_scheme_accepted(self):
-        # Scheme comparison is case-insensitive.
         assert validate_url("HTTPS://example.com") == "HTTPS://example.com"
 
     def test_mixed_case_scheme_accepted(self):
         assert validate_url("Http://example.com") == "Http://example.com"
-
-
-# ===========================================================================
-# validate_url — rejection cases
-# ===========================================================================
-
 
 class TestValidateUrlRejection:
     def test_none_raises_valueerror(self):
@@ -112,15 +88,8 @@ class TestValidateUrlRejection:
             validate_url(3.14)
 
     def test_bool_raises_valueerror(self):
-        # bool is a subclass of int in Python; ensure it is caught.
         with pytest.raises(ValueError, match="bool"):
             validate_url(True)
-
-
-# ===========================================================================
-# validate_message — happy paths
-# ===========================================================================
-
 
 class TestValidateMessageValid:
     def test_plain_text_returned(self):
@@ -149,12 +118,6 @@ class TestValidateMessageValid:
     def test_chat_input_type_label(self):
         msg = "Send me your password."
         assert validate_message(msg, input_type="chat message") == msg
-
-
-# ===========================================================================
-# validate_message — rejection cases
-# ===========================================================================
-
 
 class TestValidateMessageRejection:
     def test_none_raises_valueerror(self):

@@ -1,56 +1,3 @@
-"""
-src/detector.py
-===============
-Unified detection facade for ScamSniffer.
-
-Public API
-----------
-Detector(model_dir)
-    Load saved URL and text models from *model_dir* and expose a single
-    ``detect(input_value, input_type)`` method.
-
-detect_url(url, model_dir)     — convenience one-shot function
-detect_message(text, input_type, model_dir) — convenience one-shot function
-
-InputType
-    Enum of accepted input types: URL, EMAIL, SMS, CHAT.
-
-DetectionResult
-    Dataclass returned by every detection call.  Fields:
-
-        input_type  : str        — one of "url", "email", "sms", "chat"
-        label       : int        — 0 = legitimate, 1 = phishing/scam
-        label_text  : str        — "legitimate" or "phishing"
-        verdict     : str        — three-tier: "Potentially phishing",
-                                   "No strong signals detected", or
-                                   "Unable to assess"
-        confidence  : float      — probability of the predicted class (0–1)
-        phishing_prob : float    — P(phishing) from the model (0–1)
-        warnings    : list[str]  — human-readable indicators that raised flags
-        disclaimer  : str        — always-present safety disclaimer
-
-Three-tier verdict
-------------------
-The verdict is determined independently from the model label:
-
-  "Potentially phishing"      — model predicts phishing (label=1), OR one or
-                                 more high-confidence heuristic warnings fired.
-  "No strong signals detected" — model predicts legitimate AND no
-                                 high-confidence heuristic warnings fired.
-  "Unable to assess"          — feature extraction failed or model unavailable.
-
-⚠️  "No strong signals detected" is NOT a guarantee of safety.  The model
-    operates on a limited synthetic training set.  Always apply human judgement.
-
-Design constraints
-------------------
-- NEVER fetches, executes, or resolves any submitted URL.
-- Input is validated by src.validator before any processing.
-- Model probability is NOT a guarantee of safety.  The disclaimer field
-  repeats this on every result.
-- A missing model artefact raises ModelNotReadyError with a clear setup message.
-- Heuristic warnings are generated independently of the model score.
-"""
 
 from __future__ import annotations
 
@@ -68,16 +15,10 @@ from src.features.text_features import (
     extract_text_features,
 )
 from src.features.url_features import (
-    _KNOWN_BRANDS,
     _SUSPICIOUS_KEYWORDS,
-    _SUSPICIOUS_TLDS,
     extract_url_features,
 )
 from src.validator import validate_message, validate_url
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
 
 _DEFAULT_MODEL_DIR = Path("models")
 _URL_MODEL_FILE    = "url_model.joblib"
@@ -91,14 +32,10 @@ _DISCLAIMER = (
 
 _LABEL_TEXT = {0: "legitimate", 1: "phishing"}
 
-# Verdict strings — three-tier system.
 _VERDICT_PHISHING  = "Potentially phishing"
 _VERDICT_BENIGN    = "No strong signals detected"
 _VERDICT_UNABLE    = "Unable to assess"
 
-# Heuristic thresholds — used by _verdict_from_result(), independent of
-# model score.  These are WARNING-SIGNAL thresholds; they do NOT directly
-# classify the URL as phishing.
 _HIGH_CONF_HEURISTICS = frozenset({
     "is_ip_host",
     "has_suspicious_tld",
@@ -107,11 +44,6 @@ _HIGH_CONF_HEURISTICS = frozenset({
     "has_userinfo",
     "has_at_in_authority",
 })
-
-
-# ---------------------------------------------------------------------------
-# Enums and exceptions
-# ---------------------------------------------------------------------------
 
 
 class InputType(str, enum.Enum):
@@ -124,28 +56,8 @@ class InputType(str, enum.Enum):
 class ModelNotReadyError(RuntimeError):
     """Raised when a required model artefact has not been trained/saved yet."""
 
-
-# ---------------------------------------------------------------------------
-# Result dataclass
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class DetectionResult:
-    """
-    Result returned by every detection call.
-
-    Attributes
-    ----------
-    input_type    : str    One of "url", "email", "sms", "chat".
-    label         : int    Predicted class — 0 (legitimate) or 1 (phishing).
-    label_text    : str    Human-readable label — "legitimate" or "phishing".
-    verdict       : str    Three-tier verdict string (see module docstring).
-    confidence    : float  Probability of the *predicted* class (0.0–1.0).
-    phishing_prob : float  P(phishing) from the model regardless of prediction.
-    warnings      : list   Human-readable indicators that contributed to risk.
-    disclaimer    : str    Always-present safety caveat.
-    """
 
     input_type    : str
     label         : int
@@ -155,6 +67,10 @@ class DetectionResult:
     phishing_prob : float
     warnings      : list[str]
     disclaimer    : str = field(default=_DISCLAIMER)
+    severity: str = "Unknown"
+    possible_types: list[str] = field(default_factory=list)
+    recommended_actions: list[str] = field(default_factory=list)
+    combined_risk_score: float = 0.0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -166,26 +82,18 @@ class DetectionResult:
             "phishing_prob": round(self.phishing_prob, 4),
             "warnings":      self.warnings,
             "disclaimer":    self.disclaimer,
+            "severity":      self.severity,
+            "possible_types": self.possible_types,
+            "recommended_actions": self.recommended_actions,
+            "combined_risk_score": self.combined_risk_score,
         }
 
 
-# ---------------------------------------------------------------------------
-# Warning generators (purely lexical — no network access)
-# ---------------------------------------------------------------------------
-
-
 def _url_warnings(features: dict[str, int | float], url: str) -> list[str]:
-    """
-    Return a list of human-readable warning strings for a URL.
 
-    ⚠️  These warnings are generated INDEPENDENTLY of the model score.
-        The presence of a warning does not directly classify the URL as
-        phishing.  Brand-similarity warnings are signals, not proof.
-    """
     warnings: list[str] = []
     url_lower = url.lower()
 
-    # --- Structural / protocol warnings ---
     if features.get("is_ip_host"):
         warnings.append("Hostname is an IP address (not a domain name).")
     if not features.get("is_https"):
@@ -210,17 +118,18 @@ def _url_warnings(features: dict[str, int | float], url: str) -> list[str]:
     if features.get("url_length", 0) > 100:
         warnings.append("URL is unusually long.")
 
-    # --- Obfuscation / deception warnings (Phase 2 features) ---
     if features.get("is_idn"):
         warnings.append("Hostname uses punycode (IDN) encoding — possible visual spoofing.")
     if features.get("has_at_in_authority") or features.get("has_userinfo"):
-        warnings.append("URL contains user-info or '@' in authority — possible credential injection trick.")
+        warnings.append(
+            "URL contains user-info or '@' in authority — "
+            "possible credential injection trick."
+        )
     if features.get("has_encoded_chars"):
         warnings.append("URL contains percent-encoded characters in path or query.")
     if features.get("has_redirect_param"):
         warnings.append("URL contains a redirect/forwarding parameter.")
 
-    # --- Brand-similarity warnings (signal only, NOT proof of phishing) ---
     edit_dist = features.get("brand_min_edit_dist", 99)
     if isinstance(edit_dist, (int, float)) and 0 < edit_dist <= 2:
         warnings.append(
@@ -256,7 +165,6 @@ def _url_warnings(features: dict[str, int | float], url: str) -> list[str]:
 
 
 def _text_warnings(features: dict[str, int | float], text: str) -> list[str]:
-    """Return a list of human-readable warning strings for a text message."""
     warnings: list[str] = []
     text_lower = text.lower()
 
@@ -297,73 +205,159 @@ def _text_warnings(features: dict[str, int | float], text: str) -> list[str]:
     return warnings
 
 
-# ---------------------------------------------------------------------------
-# Verdict logic (independent of model label)
-# ---------------------------------------------------------------------------
+def _verdict_for_url(
+    label: int,
+    features: dict[str, int | float],
+) -> str:
+    structural_flags = any(features.get(h) for h in _HIGH_CONF_HEURISTICS)
 
+    brand_lookalike = (
+        0 < features.get("brand_min_edit_dist", 99) <= 2
+        or bool(features.get("has_digit_sub_in_domain"))
+        or bool(features.get("brand_in_subdomain"))
+        or bool(features.get("has_hyphen_brand"))
+        or bool(features.get("path_has_brand"))
+    )
 
-def _verdict_for_url(label: int, features: dict[str, int | float]) -> str:
-    """
-    Compute three-tier verdict for a URL result.
-
-    The verdict is "Potentially phishing" if:
-      - The model predicts phishing (label == 1), OR
-      - One or more high-confidence structural heuristics fired.
-
-    It is "No strong signals detected" only when the model predicts
-    legitimate AND no structural heuristic fired.
-
-    ⚠️  "No strong signals detected" is NOT a safety guarantee.
-
-    Note on brand_min_edit_dist == 0:
-        An edit distance of 0 means the registered domain IS a known brand
-        (e.g. amazon.com → "amazon").  This is expected for legitimate brand
-        domains and must NOT trigger the phishing verdict on its own.
-        Only structural heuristics (IP, IDN, non-std port, etc.) can do that
-        independently of the label.
-    """
-    heuristic_hit = any(features.get(h) for h in _HIGH_CONF_HEURISTICS)
-
-    if label == 1 or heuristic_hit:
+    if label == 1 or structural_flags or brand_lookalike:
         return _VERDICT_PHISHING
+
     return _VERDICT_BENIGN
 
 
-def _verdict_for_text(label: int, features: dict[str, int | float]) -> str:
-    """
-    Compute three-tier verdict for a text result.
 
-    "Potentially phishing" if model predicts phishing OR multiple high-signal
-    heuristics fired (urgency + credential request together).
-    """
-    urgency   = features.get("urgency_term_count", 0) >= 1
-    cred_req  = features.get("credential_req_count", 0) >= 1
 
-    if label == 1 or (urgency and cred_req):
+
+
+def _verdict_for_text(
+    label: int,
+    features: dict[str, int | float],
+) -> str:
+    urgency = features.get("urgency_term_count", 0) >= 1
+    credentials = features.get("credential_req_count", 0) >= 1
+
+    if urgency and credentials:
         return _VERDICT_PHISHING
+
+    if label == 1:
+        return _VERDICT_PHISHING
+
     return _VERDICT_BENIGN
 
 
-# ---------------------------------------------------------------------------
-# Detector class
-# ---------------------------------------------------------------------------
+
+
+def _assess_risk(
+    input_type: str,
+    features: dict[str, int | float],
+    warnings: list[str],
+    label: int,
+    phishing_prob: float = 0.0,
+) -> tuple[str, list[str], list[str], float]:
+    possible_types: list[str] = []
+    actions: list[str] = []
+    score = 0
+
+    if input_type == "url":
+        if features.get("is_ip_host"):
+            score += 2
+            possible_types.append("IP-address-based URL")
+        if features.get("has_suspicious_tld"):
+            score += 1
+            possible_types.append("Suspicious domain ending")
+        if features.get("is_idn") or features.get("has_encoded_chars"):
+            score += 2
+            possible_types.append("Possible URL obfuscation")
+        if features.get("has_userinfo") or features.get("has_at_in_authority"):
+            score += 2
+            possible_types.append("Possible URL authority deception")
+        if features.get("has_redirect_param"):
+            score += 1
+            possible_types.append("Possible redirect or forwarding")
+        if features.get("brand_in_subdomain") or features.get("has_hyphen_brand"):
+            score += 2
+            possible_types.append("Possible brand impersonation")
+        if features.get("has_digit_sub_in_domain"):
+            score += 2
+            possible_types.append("Possible lookalike or typosquatting")
+        if 0 < features.get("brand_min_edit_dist", 99) <= 2:
+            score += 1
+            if "Possible lookalike or typosquatting" not in possible_types:
+                possible_types.append("Possible lookalike or typosquatting")
+        if features.get("suspicious_kw_count", 0) >= 2:
+            score += 1
+            possible_types.append("Credential or account-themed URL")
+        if not features.get("is_https"):
+            score += 1
+            possible_types.append("Unencrypted HTTP connection")
+    else:
+        if features.get("credential_req_count", 0) >= 1:
+            score += 2
+            possible_types.append("Possible credential harvesting")
+        if features.get("urgency_term_count", 0) >= 1:
+            score += 1
+            possible_types.append("Urgency or account-threat pressure")
+        if features.get("money_term_count", 0) >= 1:
+            score += 1
+            possible_types.append("Possible prize or financial scam")
+        if features.get("url_count", 0) >= 1:
+            score += 1
+            possible_types.append("Message contains embedded link")
+
+    heuristic_score = min(score / 7.0, 1.0)
+    model_score = max(0.0, min(float(phishing_prob), 1.0))
+    combined_score = (0.60 * model_score) + (0.40 * heuristic_score)
+
+    lookalike = (
+        bool(features.get("has_digit_sub_in_domain"))
+        or bool(features.get("brand_in_subdomain"))
+        or bool(features.get("has_hyphen_brand"))
+        or 0 < features.get("brand_min_edit_dist", 99) <= 2
+    )
+    if input_type == "url" and lookalike:
+        combined_score = max(combined_score, 0.35)
+
+    combined_risk_score = round(combined_score * 100, 1)
+
+    if combined_risk_score >= 80:
+        severity = "Critical"
+    elif combined_risk_score >= 50:
+        severity = "High"
+    elif combined_risk_score >= 30:
+        severity = "Medium"
+    elif combined_risk_score >= 10:
+        severity = "Low"
+    else:
+        severity = "Low"
+
+    if label == 1 and not possible_types:
+        possible_types.append("Model detected suspicious patterns")
+    if not possible_types and warnings:
+        possible_types.append("Other suspicious indicators")
+    if not possible_types:
+        possible_types.append("No specific phishing pattern identified")
+
+    if severity in {"Critical", "High"}:
+        actions.append(
+            "Do not open the link or provide credentials or payment details."
+        )
+    elif severity == "Medium":
+        actions.append(
+            "Verify the sender and destination domain independently before acting."
+        )
+    else:
+        actions.append(
+            "No strong indicators were found, but this does not guarantee safety."
+        )
+
+    actions.append(
+        "If the message claims to be from an organisation, use its official app or website."
+    )
+
+    return severity, possible_types, actions, combined_risk_score
 
 
 class Detector:
-    """
-    Unified phishing/scam detector.
-
-    Parameters
-    ----------
-    model_dir:
-        Path to the directory containing ``url_model.joblib`` and
-        ``text_model.joblib``.  Defaults to ``models/``.
-
-    Raises
-    ------
-    ModelNotReadyError
-        If either model file is absent.  Run ``scripts/train.py`` first.
-    """
 
     def __init__(self, model_dir: Path | str = _DEFAULT_MODEL_DIR) -> None:
         self._model_dir = Path(model_dir)
@@ -379,33 +373,8 @@ class Detector:
             )
         return joblib.load(path)
 
-    # ------------------------------------------------------------------
-    # Public detection interface
-    # ------------------------------------------------------------------
-
     def detect(self, input_value: object, input_type: str | InputType) -> DetectionResult:
-        """
-        Analyse *input_value* and return a :class:`DetectionResult`.
 
-        Parameters
-        ----------
-        input_value:
-            The URL, email body, SMS, or chat message to analyse.
-        input_type:
-            One of ``"url"``, ``"email"``, ``"sms"``, ``"chat"``
-            (case-insensitive), or an :class:`InputType` enum member.
-
-        Returns
-        -------
-        DetectionResult
-
-        Raises
-        ------
-        ValueError
-            If *input_type* is unrecognised or *input_value* fails validation.
-        """
-        # Normalise input_type.  If an InputType enum member is passed directly,
-        # use its .value; otherwise coerce the raw string to lower-case.
         if isinstance(input_type, InputType):
             itype = input_type
         else:
@@ -421,21 +390,20 @@ class Detector:
             return self._detect_url(input_value)
         return self._detect_text(input_value, itype)
 
-    # ------------------------------------------------------------------
-    # Internal routing
-    # ------------------------------------------------------------------
-
     def _detect_url(self, raw: object) -> DetectionResult:
         """Validate, extract features, run URL model, build result."""
-        clean    = validate_url(raw)                      # raises ValueError if bad
+        clean    = validate_url(raw)
         features = extract_url_features(clean)
 
-        proba         = self._url_model.predict_proba([features])[0]  # shape (2,)
+        proba         = self._url_model.predict_proba([features])[0]
         phishing_prob = float(proba[1])
         label         = int(self._url_model.predict([features])[0])
         confidence    = float(proba[label])
         url_warnings  = _url_warnings(features, clean)
         verdict       = _verdict_for_url(label, features)
+        severity, possible_types, recommended_actions, combined_risk_score = (
+    _assess_risk("url", features, url_warnings, label, phishing_prob)
+)
 
         return DetectionResult(
             input_type    = InputType.URL.value,
@@ -445,10 +413,13 @@ class Detector:
             confidence    = confidence,
             phishing_prob = phishing_prob,
             warnings      = url_warnings,
+            severity=severity,
+            possible_types=possible_types,
+            recommended_actions=recommended_actions,
+            combined_risk_score=combined_risk_score,
         )
 
     def _detect_text(self, raw: object, itype: InputType) -> DetectionResult:
-        """Validate, run text model, build result."""
         clean    = validate_message(raw, input_type=itype.value)  # raises ValueError if bad
         features = extract_text_features(clean, input_type=itype.value)
 
@@ -458,6 +429,9 @@ class Detector:
         confidence    = float(proba[label])
         txt_warnings  = _text_warnings(features, clean)
         verdict       = _verdict_for_text(label, features)
+        severity, possible_types, recommended_actions, combined_risk_score = (
+    _assess_risk("text", features, txt_warnings, label, phishing_prob)
+)
 
         return DetectionResult(
             input_type    = itype.value,
@@ -467,21 +441,15 @@ class Detector:
             confidence    = confidence,
             phishing_prob = phishing_prob,
             warnings      = txt_warnings,
+            severity=severity,
+            possible_types=possible_types,
+            recommended_actions=recommended_actions,
+            combined_risk_score=combined_risk_score,
         )
 
 
-# ---------------------------------------------------------------------------
-# Convenience one-shot functions
-# ---------------------------------------------------------------------------
-
-
 def detect_url(url: object, model_dir: Path | str = _DEFAULT_MODEL_DIR) -> DetectionResult:
-    """
-    Convenience wrapper: build a :class:`Detector` and analyse *url*.
 
-    ⚠️  For repeated calls, instantiate :class:`Detector` once and reuse it
-    to avoid loading models from disk on every call.
-    """
     return Detector(model_dir).detect(url, InputType.URL)
 
 
@@ -490,9 +458,5 @@ def detect_message(
     input_type: str | InputType = InputType.EMAIL,
     model_dir: Path | str = _DEFAULT_MODEL_DIR,
 ) -> DetectionResult:
-    """
-    Convenience wrapper: build a :class:`Detector` and analyse *text*.
 
-    ⚠️  For repeated calls, instantiate :class:`Detector` once and reuse it.
-    """
     return Detector(model_dir).detect(text, input_type)

@@ -1,92 +1,26 @@
-"""
-src/model_comparison.py
-=======================
-Multi-model comparison utilities for ScamSniffer.
-
-Provides helpers to train and evaluate Dummy, Logistic Regression, and Random
-Forest baselines in a reproducible way, with stratified cross-validation and
-optional probability calibration.
-
-⚠️  All metrics produced by this module on the bundled synthetic data are for
-    development/comparison purposes ONLY and MUST NOT be cited as real-world
-    performance figures.
-
-Public API
-----------
-ModelComparisonResult
-    Dataclass holding per-model cross-validation metrics and fit timing.
-
-compare_url_models(feature_dicts, labels, cv, random_state)
-    Train three URL-pipeline variants (Dummy, LR, RF) and return a list of
-    ModelComparisonResult objects ranked by mean F1-score.
-
-compare_text_models(texts, labels, cv, random_state)
-    Train three text-pipeline variants and return ranked ModelComparisonResult
-    objects.
-
-calibrate_pipeline(pipeline, X_train, y_train, method, cv)
-    Wrap a fitted pipeline in CalibratedClassifierCV (isotonic or sigmoid).
-    Returns the calibrated pipeline.
-
-print_comparison_table(results)
-    Print a formatted comparison table to stdout.
-"""
 
 from __future__ import annotations
 
 import time
 import warnings
-from dataclasses import dataclass, field
-from typing import Any, Sequence
+from dataclasses import dataclass
+from typing import Any
 
 import numpy as np
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.dummy import DummyClassifier
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.model_selection import StratifiedKFold, cross_validate
 from sklearn.pipeline import Pipeline
 
-from src.features.url_features import extract_url_features
 from src.models.pipeline import build_text_pipeline, build_url_pipeline
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
-# Minimum samples needed per class for StratifiedKFold with cv folds
 _MIN_SAMPLES_PER_FOLD = 1
 
-# Calibration minimum: need enough samples for the inner CV to work
 _MIN_CALIBRATION_SAMPLES = 20
-
-
-# ---------------------------------------------------------------------------
-# Result dataclass
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class ModelComparisonResult:
-    """
-    Cross-validation metrics for a single model variant.
-
-    Attributes
-    ----------
-    model_name     : str    Human-readable name of the model/variant.
-    mean_precision : float  Mean precision across CV folds.
-    std_precision  : float  Std deviation of precision across folds.
-    mean_recall    : float  Mean recall across CV folds.
-    std_recall     : float  Std deviation of recall across folds.
-    mean_f1        : float  Mean F1-score across CV folds.
-    std_f1         : float  Std deviation of F1 across folds.
-    mean_roc_auc   : float  Mean ROC-AUC across CV folds (NaN if unavailable).
-    std_roc_auc    : float  Std deviation of ROC-AUC.
-    fit_time_s     : float  Wall-clock time to run cross_validate (seconds).
-    n_folds        : int    Number of CV folds used.
-    cv_warning     : str    Non-empty if cross-validation was degraded or
-                            skipped due to insufficient data.
-    """
 
     model_name:     str
     mean_precision: float = 0.0
@@ -110,27 +44,24 @@ class ModelComparisonResult:
             "std_recall":     round(self.std_recall, 4),
             "mean_f1":        round(self.mean_f1, 4),
             "std_f1":         round(self.std_f1, 4),
-            "mean_roc_auc":   round(self.mean_roc_auc, 4) if not np.isnan(self.mean_roc_auc) else None,
-            "std_roc_auc":    round(self.std_roc_auc, 4) if not np.isnan(self.std_roc_auc) else None,
+            "mean_roc_auc": (
+                round(self.mean_roc_auc, 4)
+                if not np.isnan(self.mean_roc_auc)
+                else None
+            ),
+            "std_roc_auc": (
+                round(self.std_roc_auc, 4)
+                if not np.isnan(self.std_roc_auc)
+                else None
+            ),
             "fit_time_s":     round(self.fit_time_s, 3),
             "n_folds":        self.n_folds,
             "cv_warning":     self.cv_warning,
         }
 
 
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
-
-
 def _safe_cv_folds(n_samples: int, n_classes: int, requested_cv: int) -> tuple[int, str]:
-    """
-    Return (actual_folds, warning_message).
 
-    Reduces *requested_cv* to the maximum value that still leaves at least
-    *_MIN_SAMPLES_PER_FOLD* sample per class per fold.  Returns (0, reason)
-    when no valid CV is possible.
-    """
     min_per_class = n_samples // n_classes
     max_folds = min(min_per_class, n_samples)
     actual = min(requested_cv, max_folds)
@@ -156,12 +87,7 @@ def _run_cv(
     random_state: int,
     model_name: str,
 ) -> ModelComparisonResult:
-    """
-    Run stratified k-fold CV and return a ModelComparisonResult.
 
-    If the dataset is too small for CV, returns zero-filled metrics with
-    a descriptive warning.
-    """
     n_classes = len(set(y))
     actual_cv, cv_warning = _safe_cv_folds(len(y), n_classes, cv)
 
@@ -204,19 +130,8 @@ def _run_cv(
 
     return result
 
-
-# ---------------------------------------------------------------------------
-# URL model comparison
-# ---------------------------------------------------------------------------
-
-
 def _build_dummy_url_pipeline(random_state: int = 42) -> Any:
-    """
-    Build a Dummy URL pipeline (stratified random predictions).
 
-    Wraps DummyClassifier in the same dict-vectoriser scaffold as the real
-    pipeline so it accepts a list[dict] input.
-    """
     from sklearn.feature_extraction import DictVectorizer
 
     return Pipeline([
@@ -226,7 +141,6 @@ def _build_dummy_url_pipeline(random_state: int = 42) -> Any:
 
 
 def _build_lr_url_pipeline(random_state: int = 42) -> Any:
-    """Build a Logistic Regression URL pipeline."""
     from sklearn.feature_extraction import DictVectorizer
     from sklearn.preprocessing import StandardScaler
 
@@ -247,26 +161,7 @@ def compare_url_models(
     cv: int = 5,
     random_state: int = 42,
 ) -> list[ModelComparisonResult]:
-    """
-    Train and cross-validate three URL-classification pipeline variants.
 
-    Variants
-    --------
-    1. DummyClassifier   — stratified random baseline
-    2. LogisticRegression — linear baseline with standard scaling
-    3. RandomForest       — the default ScamSniffer pipeline
-
-    Parameters
-    ----------
-    feature_dicts : list of feature dicts from extract_url_features()
-    labels        : corresponding integer labels (0 or 1)
-    cv            : number of CV folds (automatically reduced for tiny datasets)
-    random_state  : random seed for reproducibility
-
-    Returns
-    -------
-    List of ModelComparisonResult objects, sorted descending by mean_f1.
-    """
     pipelines = [
         ("Dummy (stratified)",     _build_dummy_url_pipeline(random_state)),
         ("LogisticRegression",     _build_lr_url_pipeline(random_state)),
@@ -282,13 +177,8 @@ def compare_url_models(
     return results
 
 
-# ---------------------------------------------------------------------------
-# Text model comparison
-# ---------------------------------------------------------------------------
-
 
 def _build_dummy_text_pipeline(random_state: int = 42) -> Any:
-    """Build a Dummy text pipeline."""
     from sklearn.feature_extraction.text import TfidfVectorizer
 
     return Pipeline([
@@ -298,7 +188,6 @@ def _build_dummy_text_pipeline(random_state: int = 42) -> Any:
 
 
 def _build_lr_text_pipeline(random_state: int = 42) -> Any:
-    """Build a Logistic Regression text pipeline."""
     from sklearn.feature_extraction.text import TfidfVectorizer
 
     return Pipeline([
@@ -317,26 +206,7 @@ def compare_text_models(
     cv: int = 5,
     random_state: int = 42,
 ) -> list[ModelComparisonResult]:
-    """
-    Train and cross-validate three text-classification pipeline variants.
 
-    Variants
-    --------
-    1. DummyClassifier   — stratified random baseline
-    2. LogisticRegression — TF-IDF + LR
-    3. RandomForest       — the default ScamSniffer text pipeline
-
-    Parameters
-    ----------
-    texts        : list of raw text strings
-    labels       : corresponding integer labels (0 or 1)
-    cv           : number of CV folds
-    random_state : random seed
-
-    Returns
-    -------
-    List of ModelComparisonResult objects, sorted descending by mean_f1.
-    """
     pipelines = [
         ("Dummy (stratified)",     _build_dummy_text_pipeline(random_state)),
         ("LogisticRegression",     _build_lr_text_pipeline(random_state)),
@@ -351,12 +221,6 @@ def compare_text_models(
     results.sort(key=lambda r: r.mean_f1, reverse=True)
     return results
 
-
-# ---------------------------------------------------------------------------
-# Calibration
-# ---------------------------------------------------------------------------
-
-
 def calibrate_pipeline(
     pipeline: Any,
     X_train: list,
@@ -364,34 +228,7 @@ def calibrate_pipeline(
     method: str = "sigmoid",
     cv: int = 3,
 ) -> Any:
-    """
-    Wrap a fitted pipeline with probability calibration.
 
-    ⚠️  Calibration is only meaningful with sufficient INDEPENDENT data.
-        Do NOT calibrate and evaluate on the same samples.  With synthetic
-        data of ≤120 samples the calibrated probabilities are NOT trustworthy
-        as real confidence scores.
-
-    Parameters
-    ----------
-    pipeline : a fitted scikit-learn pipeline (url or text)
-    X_train  : training features (list[dict] for URL, list[str] for text)
-    y_train  : training labels
-    method   : ``"sigmoid"`` (Platt scaling) or ``"isotonic"``
-    cv       : number of inner CV folds for calibration; use ``"prefit"``
-               if pipeline is already fitted and you want to calibrate on
-               held-out data only (pass calibration set as X_train/y_train).
-
-    Returns
-    -------
-    A CalibratedClassifierCV fitted on (X_train, y_train).
-
-    Raises
-    ------
-    ValueError
-        If the training set is too small for reliable calibration
-        (< _MIN_CALIBRATION_SAMPLES).
-    """
     n = len(y_train)
     if n < _MIN_CALIBRATION_SAMPLES:
         raise ValueError(
@@ -407,18 +244,8 @@ def calibrate_pipeline(
     return calibrated
 
 
-# ---------------------------------------------------------------------------
-# Display helpers
-# ---------------------------------------------------------------------------
-
-
 def print_comparison_table(results: list[ModelComparisonResult]) -> None:
-    """
-    Print a formatted comparison table to stdout.
 
-    Each row shows model name, mean±std for precision/recall/F1/ROC-AUC,
-    and wall-clock fit time.
-    """
     header = (
         f"{'Model':<35} {'Prec':>7} {'Rec':>7} {'F1':>7} {'AUC':>7} {'Time(s)':>8}"
     )

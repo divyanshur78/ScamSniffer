@@ -1,27 +1,6 @@
-"""
-tests/test_model_comparison.py
-==============================
-Unit tests for src/model_comparison.py.
-
-Strategy
---------
-- All tests use tiny in-memory datasets (10 + 10 samples).
-- No metrics are asserted as correct — only structure, types, and error handling.
-- Calibration error-path tests use intentionally tiny datasets.
-
-Coverage
---------
-  ModelComparisonResult         — fields, as_dict, defaults
-  compare_url_models            — returns list, sorted by f1, correct types
-  compare_text_models           — returns list, sorted by f1, correct types
-  _safe_cv_folds                — fold reduction, zero folds, no-warning path
-  _run_cv                       — tiny dataset degrades gracefully
-  calibrate_pipeline            — raises on tiny data, succeeds on adequate data
-  print_comparison_table        — no crash, produces output
-"""
-
 from __future__ import annotations
 
+# ruff: noqa: E402
 import math
 import sys
 from pathlib import Path
@@ -35,19 +14,14 @@ if str(_ROOT) not in sys.path:
 from src.features.url_features import extract_url_features
 from src.model_comparison import (
     ModelComparisonResult,
-    _safe_cv_folds,
     _run_cv,
+    _safe_cv_folds,
     calibrate_pipeline,
     compare_text_models,
     compare_url_models,
     print_comparison_table,
 )
-from src.models.pipeline import build_url_pipeline, build_text_pipeline
-
-
-# ---------------------------------------------------------------------------
-# Shared fixtures
-# ---------------------------------------------------------------------------
+from src.models.pipeline import build_url_pipeline
 
 _LEGIT_URLS = [
     "https://www.amazon.com/",
@@ -108,11 +82,6 @@ _ALL_TEXTS   = _LEGIT_TEXTS + _PHISH_TEXTS
 _TEXT_LABELS = [0] * 10 + [1] * 10
 
 
-# ===========================================================================
-# ModelComparisonResult
-# ===========================================================================
-
-
 class TestModelComparisonResultDefaults:
     def test_fields_present(self):
         r = ModelComparisonResult(model_name="test")
@@ -147,11 +116,6 @@ class TestModelComparisonResultDefaults:
         assert r.as_dict()["mean_roc_auc"] is None
 
 
-# ===========================================================================
-# _safe_cv_folds
-# ===========================================================================
-
-
 class TestSafeCvFolds:
     def test_enough_data_returns_requested_folds(self):
         folds, warn = _safe_cv_folds(n_samples=100, n_classes=2, requested_cv=5)
@@ -159,7 +123,6 @@ class TestSafeCvFolds:
         assert warn  == ""
 
     def test_too_small_reduces_folds(self):
-        # 4 samples, 2 classes → 2 per class → max 2 folds
         folds, warn = _safe_cv_folds(n_samples=4, n_classes=2, requested_cv=5)
         assert folds <= 5
         assert folds >= 0
@@ -177,12 +140,6 @@ class TestSafeCvFolds:
         folds, _ = _safe_cv_folds(n_samples=6, n_classes=2, requested_cv=10)
         assert folds <= 6
 
-
-# ===========================================================================
-# _run_cv
-# ===========================================================================
-
-
 class TestRunCv:
     def test_returns_model_comparison_result(self):
         pipe = build_url_pipeline(random_state=42)
@@ -191,7 +148,7 @@ class TestRunCv:
 
     def test_model_name_preserved(self):
         pipe = build_url_pipeline(random_state=42)
-        result = _run_cv(pipe, _URL_FEATURES, _URL_LABELS, cv=3, random_state=42, model_name="MyModel")
+        result = _run_cv(pipe,_URL_FEATURES,_URL_LABELS,cv=3,random_state=42,model_name="MyModel",)
         assert result.model_name == "MyModel"
 
     def test_n_folds_set_when_cv_succeeds(self):
@@ -214,11 +171,6 @@ class TestRunCv:
         result = _run_cv(pipe, feats, labels, cv=5, random_state=42, model_name="RF")
         assert result.n_folds == 0
         assert len(result.cv_warning) > 0
-
-
-# ===========================================================================
-# compare_url_models
-# ===========================================================================
 
 
 class TestCompareUrlModels:
@@ -258,11 +210,6 @@ class TestCompareUrlModels:
         assert any("random" in n.lower() or "forest" in n.lower() for n in names)
 
 
-# ===========================================================================
-# compare_text_models
-# ===========================================================================
-
-
 class TestCompareTextModels:
     def setup_method(self):
         self.results = compare_text_models(
@@ -287,12 +234,6 @@ class TestCompareTextModels:
         names = [r.model_name for r in self.results]
         assert len(set(names)) == len(names)
 
-
-# ===========================================================================
-# calibrate_pipeline
-# ===========================================================================
-
-
 class TestCalibratePipeline:
     def test_raises_on_too_small_dataset(self):
         pipe = build_url_pipeline(random_state=42)
@@ -302,10 +243,8 @@ class TestCalibratePipeline:
             calibrate_pipeline(pipe, feats, labels)
 
     def test_succeeds_on_adequate_dataset(self):
-        # Use an unfitted pipeline with inner cv=3; sklearn handles fit+calibrate internally
         pipe = build_url_pipeline(random_state=42)
         calibrated = calibrate_pipeline(pipe, _URL_FEATURES, _URL_LABELS, cv=3)
-        # Calibrated pipeline must expose predict_proba
         probas = calibrated.predict_proba(_URL_FEATURES[:2])
         assert probas.shape[1] == 2
 
@@ -314,11 +253,6 @@ class TestCalibratePipeline:
         with pytest.raises(ValueError) as exc_info:
             calibrate_pipeline(pipe, _URL_FEATURES[:3], [0, 1, 0])
         assert "20" in str(exc_info.value) or "samples" in str(exc_info.value)
-
-
-# ===========================================================================
-# print_comparison_table
-# ===========================================================================
 
 
 class TestPrintComparisonTable:

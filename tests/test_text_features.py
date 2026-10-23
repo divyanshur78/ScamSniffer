@@ -1,27 +1,3 @@
-"""
-tests/test_text_features.py
-============================
-Unit tests for src/features/text_features.py.
-
-Coverage targets:
-  - Feature dict shape and key completeness
-  - Normal (benign-looking) message
-  - Suspicious phishing message (urgency + credential + money terms)
-  - SMS-style short message
-  - Chat message with embedded URLs
-  - All-uppercase message (uppercase_ratio)
-  - Mixed-case ratio
-  - Exclamation and question mark counting
-  - URL detection (no fetching — purely pattern-based)
-  - Urgency term counting
-  - Credential request term counting
-  - Money term counting
-  - Digit ratio
-  - Unique word ratio (repetitive vs varied text)
-  - Whitespace stripping
-  - Invalid inputs delegated to validator (None, int, empty, whitespace, oversized)
-  - Internal helper functions (_uppercase_ratio, _digit_ratio, _unique_word_ratio)
-"""
 
 from __future__ import annotations
 
@@ -32,16 +8,9 @@ from src.features.text_features import (
     _digit_ratio,
     _unique_word_ratio,
     _uppercase_ratio,
-    _CREDENTIAL_TERMS,
-    _MONEY_TERMS,
-    _URGENCY_TERMS,
     extract_text_features,
 )
 from src.validator import MESSAGE_MAX_LENGTH
-
-# ---------------------------------------------------------------------------
-# Expected keys — every result must contain exactly these.
-# ---------------------------------------------------------------------------
 
 EXPECTED_KEYS = {
     "text_length",
@@ -58,12 +27,6 @@ EXPECTED_KEYS = {
     "unique_word_ratio",
 }
 
-
-# ===========================================================================
-# Internal helper unit tests
-# ===========================================================================
-
-
 class TestUppercaseRatio:
     def test_all_lowercase_is_zero(self):
         assert _uppercase_ratio("hello world") == 0.0
@@ -72,14 +35,12 @@ class TestUppercaseRatio:
         assert _uppercase_ratio("HELLO") == 1.0
 
     def test_half_uppercase(self):
-        # "Ab" → 1 upper out of 2 alpha = 0.5
         assert _uppercase_ratio("Ab") == pytest.approx(0.5)
 
     def test_no_alpha_chars_returns_zero(self):
         assert _uppercase_ratio("12345!?") == 0.0
 
     def test_digits_ignored(self):
-        # "A1B" → 2 alpha, both upper → 1.0
         assert _uppercase_ratio("A1B") == 1.0
 
 
@@ -91,7 +52,6 @@ class TestDigitRatio:
         assert _digit_ratio("123456") == 1.0
 
     def test_mixed(self):
-        # "a1" → 1 digit out of 2 chars = 0.5
         assert _digit_ratio("a1") == pytest.approx(0.5)
 
     def test_empty_returns_zero(self):
@@ -103,14 +63,12 @@ class TestUniqueWordRatio:
         assert _unique_word_ratio(["hello", "world", "foo"]) == 1.0
 
     def test_all_same_returns_fraction(self):
-        # 1 unique out of 3 total = 0.333…
         assert _unique_word_ratio(["win", "win", "win"]) == pytest.approx(1 / 3)
 
     def test_empty_list_returns_zero(self):
         assert _unique_word_ratio([]) == 0.0
 
     def test_case_insensitive(self):
-        # "WIN" and "win" treated as same word
         assert _unique_word_ratio(["WIN", "win"]) == pytest.approx(0.5)
 
 
@@ -127,7 +85,6 @@ class TestCountTerms:
         assert count == 3
 
     def test_repeated_term_counted_once(self):
-        # "urgent" appears twice but is counted once (distinct term)
         count = _count_terms("urgent urgent", frozenset({"urgent"}))
         assert count == 1
 
@@ -136,14 +93,8 @@ class TestCountTerms:
         assert count == 1
 
     def test_word_boundary_respected(self):
-        # "pin" should not match inside "spinning"
         count = _count_terms("spinning wheel", frozenset({"pin"}))
         assert count == 0
-
-
-# ===========================================================================
-# extract_text_features — feature dict shape
-# ===========================================================================
 
 
 class TestFeatureDictShape:
@@ -162,12 +113,6 @@ class TestFeatureDictShape:
     def test_no_none_values(self):
         result = extract_text_features("Hello world.")
         assert all(v is not None for v in result.values())
-
-
-# ===========================================================================
-# extract_text_features — normal benign message
-# ===========================================================================
-
 
 class TestNormalMessage:
     MSG = "Hi there, just checking in to see how you are doing today."
@@ -197,14 +142,7 @@ class TestNormalMessage:
         assert self.f["money_term_count"] == 0
 
     def test_uppercase_ratio_low(self):
-        # Only "Hi" starts with uppercase; ratio should be well below 0.5
         assert self.f["uppercase_ratio"] < 0.5
-
-
-# ===========================================================================
-# extract_text_features — suspicious phishing message
-# ===========================================================================
-
 
 class TestSuspiciousPhishingMessage:
     MSG = (
@@ -232,13 +170,7 @@ class TestSuspiciousPhishingMessage:
         assert self.f["url_count"] == 1
 
     def test_uppercase_ratio_elevated(self):
-        # "URGENT" pushes ratio above 0
         assert self.f["uppercase_ratio"] > 0
-
-
-# ===========================================================================
-# extract_text_features — SMS-style short message
-# ===========================================================================
 
 
 class TestSmsMessage:
@@ -253,12 +185,6 @@ class TestSmsMessage:
     def test_digit_ratio_positive(self):
         f = extract_text_features("Call 555-1234 today.", input_type="SMS")
         assert f["digit_ratio"] > 0.0
-
-
-# ===========================================================================
-# extract_text_features — chat message with embedded URLs
-# ===========================================================================
-
 
 class TestChatMessageWithUrls:
     def test_single_url_detected(self):
@@ -284,12 +210,6 @@ class TestChatMessageWithUrls:
         f = extract_text_features("See http://192.168.0.1/admin for details.")
         assert f["url_count"] == 1
 
-
-# ===========================================================================
-# extract_text_features — uppercase ratio
-# ===========================================================================
-
-
 class TestUppercaseRatioFeature:
     def test_all_caps_message(self):
         f = extract_text_features("CLICK HERE NOW")
@@ -302,11 +222,6 @@ class TestUppercaseRatioFeature:
     def test_digits_only_message_is_zero(self):
         f = extract_text_features("12345678")
         assert f["uppercase_ratio"] == pytest.approx(0.0)
-
-
-# ===========================================================================
-# extract_text_features — exclamation and question marks
-# ===========================================================================
 
 
 class TestPunctuation:
@@ -322,12 +237,6 @@ class TestPunctuation:
         f = extract_text_features("What?! Act now!")
         assert f["exclamation_count"] == 2
         assert f["question_count"] == 1
-
-
-# ===========================================================================
-# extract_text_features — term set coverage
-# ===========================================================================
-
 
 class TestUrgencyTerms:
     @pytest.mark.parametrize("term", ["urgent", "suspended", "alert", "warning", "critical"])
@@ -349,12 +258,6 @@ class TestMoneyTerms:
         f = extract_text_features(f"You have a pending {term}.")
         assert f["money_term_count"] >= 1
 
-
-# ===========================================================================
-# extract_text_features — unique word ratio
-# ===========================================================================
-
-
 class TestUniqueWordRatioFeature:
     def test_repetitive_text_has_low_ratio(self):
         f = extract_text_features("win win win win win")
@@ -363,12 +266,6 @@ class TestUniqueWordRatioFeature:
     def test_all_unique_words_has_ratio_one(self):
         f = extract_text_features("the quick brown fox")
         assert f["unique_word_ratio"] == pytest.approx(1.0)
-
-
-# ===========================================================================
-# extract_text_features — whitespace handling
-# ===========================================================================
-
 
 class TestWhitespaceHandling:
     def test_leading_trailing_whitespace_stripped(self):
@@ -379,12 +276,6 @@ class TestWhitespaceHandling:
         f = extract_text_features("  hello world  ")
         assert f["word_count"] == 2
 
-
-# ===========================================================================
-# extract_text_features — average word length
-# ===========================================================================
-
-
 class TestAvgWordLength:
     def test_single_word(self):
         f = extract_text_features("hello")
@@ -394,12 +285,6 @@ class TestAvgWordLength:
         # "hi" + "ho" → (2+2)/2 = 2.0
         f = extract_text_features("hi ho")
         assert f["avg_word_length"] == pytest.approx(2.0)
-
-
-# ===========================================================================
-# extract_text_features — invalid inputs (delegated to validator)
-# ===========================================================================
-
 
 class TestInvalidInputs:
     def test_none_raises_valueerror(self):

@@ -1,24 +1,8 @@
-"""
-src/evaluation.py
-=================
-Model evaluation utilities for ScamSniffer.
-
-Provides a single public function:
-
-    evaluate(y_true, y_pred, y_proba=None) -> EvaluationResult
-
-which returns a dataclass containing precision, recall, F1-score,
-confusion matrix, class counts, and optionally ROC-AUC.
-
-⚠️  Metrics computed here reflect *only the dataset passed in*.
-    Synthetic-data results are not representative of real-world performance.
-    Do not use scores from this module as claims of production accuracy.
-"""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
 import numpy as np
 from sklearn.metrics import (
@@ -31,14 +15,8 @@ from sklearn.metrics import (
 )
 
 
-# ---------------------------------------------------------------------------
-# Result dataclass
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class EvaluationResult:
-    """Container for evaluation metrics returned by :func:`evaluate`."""
 
     precision: float
     recall: float
@@ -49,7 +27,6 @@ class EvaluationResult:
     roc_auc: float | None = field(default=None)
 
     def as_dict(self) -> dict:
-        """Return a JSON-serialisable representation."""
         return {
             "precision": round(self.precision, 6),
             "recall": round(self.recall, 6),
@@ -61,42 +38,12 @@ class EvaluationResult:
         }
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
 def evaluate(
     y_true: Sequence[int],
     y_pred: Sequence[int],
     y_proba: Sequence[float] | None = None,
 ) -> EvaluationResult:
-    """
-    Compute evaluation metrics from true and predicted labels.
 
-    Parameters
-    ----------
-    y_true:
-        Ground-truth binary labels (0 = legitimate, 1 = phishing).
-    y_pred:
-        Predicted binary labels.
-    y_proba:
-        Optional predicted probability of the positive class (label 1).
-        Required for ROC-AUC; ignored when fewer than 2 classes are present
-        in y_true (avoids undefined-metric errors on trivial test splits).
-
-    Returns
-    -------
-    EvaluationResult
-        Dataclass with precision, recall, f1, confusion_matrix,
-        class_counts, classification_report, and roc_auc (or None).
-
-    Raises
-    ------
-    ValueError
-        If y_true or y_pred are empty, have different lengths, or contain
-        values outside {0, 1}.
-    """
     y_true_arr = np.asarray(y_true, dtype=int)
     y_pred_arr = np.asarray(y_pred, dtype=int)
 
@@ -118,7 +65,6 @@ def evaluate(
     unique_classes = sorted(set(y_true_arr.tolist()))
     n_classes = len(unique_classes)
 
-    # zero_division=0 avoids warnings on tiny splits where a class is absent.
     precision = float(
         precision_score(y_true_arr, y_pred_arr, zero_division=0)
     )
@@ -140,7 +86,6 @@ def evaluate(
         "phishing (1)": int((y_true_arr == 1).sum()),
     }
 
-    # ROC-AUC only defined when both classes present and probabilities supplied.
     roc_auc: float | None = None
     if y_proba is not None and n_classes == 2:
         roc_auc = float(roc_auc_score(y_true_arr, np.asarray(y_proba)))

@@ -1,25 +1,3 @@
-"""
-tests/test_pipeline.py
-=======================
-Unit tests for src/models/pipeline.py.
-
-Coverage targets:
-  - Pipeline construction (factory functions return correct types)
-  - URL pipeline: fit + predict on tiny in-memory feature-dict examples
-  - URL pipeline: predict_proba shape and probability bounds
-  - URL pipeline: determinism via random_state
-  - URL pipeline: custom random_state accepted
-  - URL pipeline: invalid inputs (wrong type, empty list, bad labels)
-  - Text pipeline: fit + predict on tiny in-memory string examples
-  - Text pipeline: predict_proba shape and probability bounds
-  - Text pipeline: determinism via random_state
-  - Text pipeline: invalid inputs (wrong type, empty list, bad labels)
-  - Label validation: wrong length, out-of-range values, 2-D array
-  - Pipeline independence: URL and text pipelines are separate objects
-
-All training data is tiny and synthetic — no real dataset is loaded.
-No model metrics are asserted; only structural correctness is verified.
-"""
 
 from __future__ import annotations
 
@@ -35,11 +13,6 @@ from src.models.pipeline import (
     build_url_pipeline,
 )
 
-# ---------------------------------------------------------------------------
-# Minimal synthetic training data
-# ---------------------------------------------------------------------------
-
-# Two toy URL feature dicts — just enough keys for DictVectorizer to work.
 URL_FEATURES_LEGIT: list[dict] = [
     {"url_length": 25, "is_https": 1, "suspicious_kw_count": 0,
      "has_suspicious_tld": 0, "domain_entropy": 2.5, "is_ip_host": 0,
@@ -83,11 +56,6 @@ TEXT_X_TRAIN: list[str] = [
     "Bank account locked. Confirm credentials now or lose access forever.",
 ]
 TEXT_Y_TRAIN: list[int] = [0, 0, 0, 1, 1, 1]
-
-
-# ===========================================================================
-# Input validation helpers
-# ===========================================================================
 
 
 class TestValidateFeatureDicts:
@@ -159,12 +127,6 @@ class TestValidateLabels:
         arr = _validate_labels([1, 1], 2)
         assert list(arr) == [1, 1]
 
-
-# ===========================================================================
-# URL pipeline — construction
-# ===========================================================================
-
-
 class TestBuildUrlPipeline:
     def test_returns_url_pipeline_type(self):
         from src.models.pipeline import _UrlPipeline
@@ -191,12 +153,6 @@ class TestBuildUrlPipeline:
     def test_default_random_state_is_42(self):
         p = build_url_pipeline()
         assert p.pipeline.named_steps["classifier"].random_state == 42
-
-
-# ===========================================================================
-# URL pipeline — fit / predict
-# ===========================================================================
-
 
 class TestUrlPipelineFitPredict:
     def setup_method(self):
@@ -238,12 +194,6 @@ class TestUrlPipelineFitPredict:
             p2.predict(URL_X_TRAIN),
         )
 
-
-# ===========================================================================
-# URL pipeline — invalid inputs at predict time
-# ===========================================================================
-
-
 class TestUrlPipelineInvalidPredict:
     def setup_method(self):
         self.pipeline = build_url_pipeline()
@@ -261,12 +211,6 @@ class TestUrlPipelineInvalidPredict:
         with pytest.raises(TypeError):
             self.pipeline.predict(["not a dict"])
 
-
-# ===========================================================================
-# URL pipeline — invalid inputs at fit time
-# ===========================================================================
-
-
 class TestUrlPipelineInvalidFit:
     def test_wrong_label_length_raises_valueerror(self):
         p = build_url_pipeline()
@@ -283,12 +227,6 @@ class TestUrlPipelineInvalidFit:
         p = build_url_pipeline()
         with pytest.raises(TypeError):
             p.fit("not a list", URL_Y_TRAIN)
-
-
-# ===========================================================================
-# Text pipeline — construction
-# ===========================================================================
-
 
 class TestBuildTextPipeline:
     def test_returns_text_pipeline_type(self):
@@ -316,11 +254,6 @@ class TestBuildTextPipeline:
     def test_default_random_state_is_42(self):
         p = build_text_pipeline()
         assert p.pipeline.named_steps["classifier"].random_state == 42
-
-
-# ===========================================================================
-# Text pipeline — fit / predict
-# ===========================================================================
 
 
 class TestTextPipelineFitPredict:
@@ -367,12 +300,6 @@ class TestTextPipelineFitPredict:
         assert len(preds) == 1
         assert preds[0] in (0, 1)
 
-
-# ===========================================================================
-# Text pipeline — invalid inputs at predict time
-# ===========================================================================
-
-
 class TestTextPipelineInvalidPredict:
     def setup_method(self):
         self.pipeline = build_text_pipeline()
@@ -391,11 +318,6 @@ class TestTextPipelineInvalidPredict:
             self.pipeline.predict([1, 2, 3])
 
 
-# ===========================================================================
-# Text pipeline — invalid inputs at fit time
-# ===========================================================================
-
-
 class TestTextPipelineInvalidFit:
     def test_wrong_label_length_raises_valueerror(self):
         p = build_text_pipeline()
@@ -412,12 +334,6 @@ class TestTextPipelineInvalidFit:
         p = build_text_pipeline()
         with pytest.raises(TypeError):
             p.fit("not a list at all", TEXT_Y_TRAIN)
-
-
-# ===========================================================================
-# Pipeline independence
-# ===========================================================================
-
 
 class TestPipelineIndependence:
     def test_url_and_text_pipelines_are_separate_objects(self):

@@ -1,49 +1,34 @@
-"""
-tests/test_train.py
-====================
-Unit tests for src/evaluation.py and scripts/train.py.
-
-All tests use tiny in-memory datasets or temporary directories.
-No real files from data/samples/ are required to run the test suite.
-No model metrics are asserted as correct — only structure and error handling.
-"""
-
 from __future__ import annotations
 
 import json
 import sys
 from pathlib import Path
 
-import numpy as np
 import pytest
 
-# Ensure project root is importable when pytest is run from the repo root.
+# ruff: noqa: E402
+
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.evaluation import EvaluationResult, evaluate
+import pandas as pd
+
 from scripts.train import (
+    _split_stratified,
     _validate_columns,
     _validate_labels_column,
     _validate_min_class_counts,
     _validate_no_nulls,
-    _split_stratified,
-    load_url_data,
     load_message_data,
-    train_url_model,
-    train_text_model,
+    load_url_data,
+    main,
     save_model,
     save_report,
-    main,
+    train_text_model,
+    train_url_model,
 )
-
-import pandas as pd
-
-
-# ===========================================================================
-# src/evaluation.py
-# ===========================================================================
+from src.evaluation import EvaluationResult, evaluate
 
 
 class TestEvaluateInputGuards:
@@ -114,7 +99,6 @@ class TestEvaluateWithProba:
         assert 0.0 <= result.roc_auc <= 1.0
 
     def test_roc_auc_none_single_class(self):
-        # Only one class in y_true → roc_auc undefined → returns None.
         result = evaluate(
             y_true=[1, 1, 1],
             y_pred=[1, 1, 1],
@@ -127,7 +111,7 @@ class TestEvaluateAsDictSerializable:
     def test_as_dict_is_json_serializable(self):
         result = evaluate([0, 1, 0, 1], [0, 1, 1, 0])
         d = result.as_dict()
-        serialized = json.dumps(d)  # must not raise
+        serialized = json.dumps(d)
         assert isinstance(serialized, str)
 
     def test_as_dict_has_required_keys(self):
@@ -154,7 +138,6 @@ class TestEvaluatePerfectPrediction:
 
 class TestEvaluateAllWrongPrediction:
     def test_zero_precision_all_wrong(self):
-        # All phishing predicted as legit.
         result = evaluate([1, 1, 1], [0, 0, 0])
         assert result.precision == pytest.approx(0.0)
 
@@ -163,15 +146,10 @@ class TestEvaluateAllWrongPrediction:
         assert result.recall == pytest.approx(0.0)
 
 
-# ===========================================================================
-# scripts/train.py — validation helpers
-# ===========================================================================
-
-
 class TestValidateColumns:
     def test_passes_with_required_columns(self):
         df = pd.DataFrame({"url": ["x"], "label": [0]})
-        _validate_columns(df, {"url", "label"}, "test.csv")  # must not raise
+        _validate_columns(df, {"url", "label"}, "test.csv")
 
     def test_raises_on_missing_column(self):
         df = pd.DataFrame({"url": ["x"]})
@@ -182,7 +160,7 @@ class TestValidateColumns:
 class TestValidateLabelsColumn:
     def test_valid_binary_labels(self):
         df = pd.DataFrame({"label": [0, 1, 0, 1]})
-        _validate_labels_column(df, "test.csv")  # must not raise
+        _validate_labels_column(df, "test.csv")
 
     def test_raises_on_bad_label(self):
         df = pd.DataFrame({"label": [0, 1, 2]})
@@ -193,7 +171,7 @@ class TestValidateLabelsColumn:
 class TestValidateNoNulls:
     def test_no_nulls_passes(self):
         df = pd.DataFrame({"url": ["http://x.com"], "label": [0]})
-        _validate_no_nulls(df, "test.csv")  # must not raise
+        _validate_no_nulls(df, "test.csv")
 
     def test_raises_on_null_value(self):
         df = pd.DataFrame({"url": [None], "label": [0]})
@@ -204,7 +182,7 @@ class TestValidateNoNulls:
 class TestValidateMinClassCounts:
     def test_sufficient_counts_passes(self):
         s = pd.Series([0, 0, 1, 1])
-        _validate_min_class_counts(s, "test.csv", minimum=2)  # must not raise
+        _validate_min_class_counts(s, "test.csv", minimum=2)
 
     def test_raises_when_class_missing(self):
         s = pd.Series([0, 0, 0])
@@ -215,12 +193,6 @@ class TestValidateMinClassCounts:
         s = pd.Series([0, 0, 0, 1])
         with pytest.raises(ValueError, match="class 1"):
             _validate_min_class_counts(s, "test.csv", minimum=2)
-
-
-# ===========================================================================
-# scripts/train.py — file loading
-# ===========================================================================
-
 
 class TestLoadUrlData:
     def test_missing_file_raises_filenotfounderror(self, tmp_path):
@@ -242,7 +214,10 @@ class TestLoadUrlData:
         )
         (tmp_path / "urls.csv").write_text(csv)
         result = load_url_data(tmp_path)
-        assert len(result) == 4, "load_url_data must return a 4-tuple (features, labels, urls, dedup_report)"
+        assert len(result) == 4, (
+            "load_url_data must return a 4-tuple "
+            "(features, labels, urls, dedup_report)"
+        )
         features, labels, raw_urls, dedup_report = result
         assert len(features) == len(labels)
         assert all(isinstance(f, dict) for f in features)
@@ -291,12 +266,6 @@ class TestLoadMessageData:
         assert len(texts) == 4
         assert labels == [0, 0, 1, 1]
 
-
-# ===========================================================================
-# scripts/train.py — split helper
-# ===========================================================================
-
-
 class TestSplitStratified:
     def test_returns_two_non_overlapping_index_lists(self):
         labels = [0, 0, 0, 1, 1, 1]
@@ -319,13 +288,6 @@ class TestSplitStratified:
         assert len(train) >= 1
         assert len(test) >= 1
 
-
-# ===========================================================================
-# scripts/train.py — train helpers (tiny in-memory data)
-# ===========================================================================
-
-
-# Reuse the same minimal synthetic feature dicts from test_pipeline.py style.
 _URL_FEATURES_LEGIT = [
     {"url_length": 25, "is_https": 1, "suspicious_kw_count": 0,
      "has_suspicious_tld": 0, "domain_entropy": 2.5, "is_ip_host": 0,
@@ -408,12 +370,6 @@ class TestTrainTextModel:
         assert len(preds) == len(_TEXT_X)
         assert set(preds.tolist()).issubset({0, 1})
 
-
-# ===========================================================================
-# scripts/train.py — save helpers
-# ===========================================================================
-
-
 class TestSaveHelpers:
     def test_save_model_creates_file(self, tmp_path):
         from src.models.pipeline import build_url_pipeline
@@ -435,12 +391,7 @@ class TestSaveHelpers:
         result = evaluate([0, 1, 0, 1], [0, 1, 1, 0])
         out = tmp_path / "metrics.json"
         save_report(result, out)
-        json.loads(out.read_text())  # must not raise
-
-
-# ===========================================================================
-# scripts/train.py — main() CLI integration
-# ===========================================================================
+        json.loads(out.read_text())
 
 
 class TestMainCli:

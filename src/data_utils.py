@@ -1,60 +1,16 @@
-"""
-src/data_utils.py
-=================
-Dataset quality utilities for ScamSniffer training data.
-
-Provides deterministic, offline-only helpers for:
-  - Exact and near-duplicate URL detection
-  - Conflicting-label detection (same URL, different labels)
-  - Registered-domain extraction for grouping
-  - Domain-grouped train/test splitting (with documented fallback)
-  - Dataset provenance summary reporting
-
-⚠️  No network requests are made at any point.  tldextract uses its bundled
-    snapshot; no live Public Suffix List update is performed.
-
-Public API
-----------
-DeduplicationReport
-    Dataclass summarising exact duplicates, near-duplicates, and conflicting
-    labels found in a URL list.
-
-deduplicate_urls(urls, labels)
-    Remove exact duplicates and conflicting-label rows; return cleaned
-    (urls, labels) plus a DeduplicationReport.
-
-domain_grouped_split(urls, labels, test_size, random_state, min_group_size)
-    Split a URL dataset by registered domain to prevent data leakage between
-    train and test sets.  Falls back to stratified split when the dataset is
-    too small for a clean domain split.  Returns (train_idx, test_idx, report).
-
-DomainSplitReport
-    Dataclass describing which strategy was used and summary statistics.
-
-dataset_summary(urls, labels)
-    Return a plain-text summary of dataset statistics for logging/documentation.
-"""
 
 from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Sequence
 
 import tldextract
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
 
 def _registered_domain(url: str) -> str:
-    """
-    Return the registered domain (domain + suffix) from *url*, lower-cased.
 
-    Returns an empty string for bare IPs, localhost, or unparseable inputs.
-    """
     try:
         ext = tldextract.extract(url)
         if ext.domain and ext.suffix:
@@ -65,40 +21,14 @@ def _registered_domain(url: str) -> str:
 
 
 def _normalise_url(url: str) -> str:
-    """
-    Return a case-folded, scheme-stripped form of *url* for near-duplicate
-    detection.  Strips trailing slashes and lowercases the entire URL.
-    """
+
     normalised = url.strip().lower()
-    # Strip scheme
     normalised = re.sub(r"^https?://", "", normalised)
-    # Strip trailing slash
     normalised = normalised.rstrip("/")
     return normalised
 
-
-# ---------------------------------------------------------------------------
-# Deduplication
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class DeduplicationReport:
-    """
-    Summary of duplicates and conflicts found in a URL dataset.
-
-    Attributes
-    ----------
-    exact_duplicate_indices   : list[int]
-        Row indices that are exact string duplicates of an earlier row.
-    near_duplicate_pairs      : list[tuple[int, int]]
-        Pairs of row indices whose normalised forms (scheme-stripped,
-        case-folded, slash-trimmed) are identical.
-    conflicting_label_indices : list[int]
-        Row indices whose URL appeared earlier with a *different* label.
-    n_removed                 : int
-        Total number of rows removed (exact duplicates + conflicting labels).
-    """
 
     exact_duplicate_indices:   list[int] = field(default_factory=list)
     near_duplicate_pairs:      list[tuple[int, int]] = field(default_factory=list)
@@ -118,31 +48,9 @@ def deduplicate_urls(
     urls: Sequence[str],
     labels: Sequence[int],
 ) -> tuple[list[str], list[int], DeduplicationReport]:
-    """
-    Detect and remove exact duplicates and conflicting-label rows.
 
-    Strategy
-    --------
-    1. Exact duplicates: identical URL string.  Keep first occurrence.
-    2. Conflicting labels: same URL string appears with both label 0 and 1.
-       Both the earlier and later occurrences are removed.
-    3. Near-duplicates (scheme/case/slash differences) are *reported* but
-       NOT automatically removed, because the model may legitimately want
-       the same path under http and https as two separate training samples.
-
-    Parameters
-    ----------
-    urls   : sequence of URL strings (already validated or raw).
-    labels : corresponding integer labels (0 or 1).
-
-    Returns
-    -------
-    (cleaned_urls, cleaned_labels, report)
-    """
     report = DeduplicationReport()
 
-    # --- Pass 1: detect conflicting labels ---
-    # Map url -> first seen label
     first_seen_label: dict[str, int] = {}
     conflict_urls: set[str] = set()
     for url, label in zip(urls, labels):
@@ -152,7 +60,6 @@ def deduplicate_urls(
         else:
             first_seen_label[url] = label
 
-    # --- Pass 2: detect exact duplicates and build keep set ---
     seen_urls: set[str] = set()
     to_remove: set[int] = set()
 
@@ -169,7 +76,6 @@ def deduplicate_urls(
 
     report.n_removed = len(to_remove)
 
-    # --- Pass 3: near-duplicate detection (report only) ---
     norm_to_indices: dict[str, list[int]] = defaultdict(list)
     for i, url in enumerate(urls):
         if i not in to_remove:
@@ -180,37 +86,15 @@ def deduplicate_urls(
                 for k in range(j + 1, len(indices)):
                     report.near_duplicate_pairs.append((indices[j], indices[k]))
 
-    # Build cleaned lists
     cleaned_urls   = [u for i, u in enumerate(urls)   if i not in to_remove]
-    cleaned_labels = [l for i, l in enumerate(labels) if i not in to_remove]
+    cleaned_labels = [
+    label for i, label in enumerate(labels) if i not in to_remove
+]
 
     return cleaned_urls, cleaned_labels, report
 
-
-# ---------------------------------------------------------------------------
-# Domain-grouped split
-# ---------------------------------------------------------------------------
-
-
 @dataclass
 class DomainSplitReport:
-    """
-    Metadata about which splitting strategy was applied.
-
-    Attributes
-    ----------
-    strategy              : str
-        ``"domain_grouped"`` or ``"stratified_fallback"``.
-    reason                : str
-        Human-readable explanation of why this strategy was chosen.
-    n_total               : int   Total samples after deduplication.
-    n_train               : int   Training set size.
-    n_test                : int   Test set size.
-    n_domains             : int   Number of distinct registered domains.
-    n_single_sample_domains: int  Domains with only one sample.
-    train_class_counts    : dict  {label: count} for train set.
-    test_class_counts     : dict  {label: count} for test set.
-    """
 
     strategy:               str = ""
     reason:                 str = ""
@@ -236,8 +120,6 @@ class DomainSplitReport:
         }
 
 
-# Minimum number of independent domain groups needed per class for a clean
-# domain-grouped split (must leave at least one domain per class in test).
 _MIN_DOMAIN_GROUPS_PER_CLASS = 2
 
 
@@ -248,33 +130,7 @@ def domain_grouped_split(
     random_state: int = 42,
     min_group_size: int = 1,
 ) -> tuple[list[int], list[int], DomainSplitReport]:
-    """
-    Split URL indices by registered domain to prevent data leakage.
 
-    Each registered domain is placed entirely in either train or test,
-    so the model is evaluated on domains it has never seen.  This is the
-    preferred strategy when enough distinct domains per class are available.
-
-    Fallback
-    --------
-    When there are fewer than ``_MIN_DOMAIN_GROUPS_PER_CLASS`` distinct
-    domain groups per class, a stratified index split is used instead and
-    the report documents the reason clearly.
-
-    Parameters
-    ----------
-    urls          : sequence of URL strings.
-    labels        : corresponding labels (0 = legitimate, 1 = phishing).
-    test_size     : fraction of *domains* to place in test (not samples).
-    random_state  : seed for deterministic shuffling.
-    min_group_size: minimum samples a domain group must have to participate
-                    in the split; singletons are documented in the report.
-
-    Returns
-    -------
-    (train_indices, test_indices, report)
-        All indices are integers into the original *urls* / *labels* sequences.
-    """
     import numpy as np
 
     urls_list   = list(urls)
@@ -282,7 +138,6 @@ def domain_grouped_split(
     n           = len(urls_list)
     report      = DomainSplitReport(n_total=n)
 
-    # --- Group indices by registered domain ---
     domain_to_indices: dict[str, list[int]] = defaultdict(list)
     for i, url in enumerate(urls_list):
         rd = _registered_domain(url) or f"__no_domain_{i}__"
@@ -293,9 +148,6 @@ def domain_grouped_split(
         1 for idxs in domain_to_indices.values() if len(idxs) == 1
     )
 
-    # --- Determine dominant label per domain group ---
-    # A domain group gets the label of its majority sample.
-    # Ties go to the phishing class (1) as the conservative choice.
     domain_labels: dict[str, int] = {}
     for domain, idxs in domain_to_indices.items():
         cls_counts = defaultdict(int)
@@ -303,7 +155,6 @@ def domain_grouped_split(
             cls_counts[labels_list[i]] += 1
         domain_labels[domain] = max(cls_counts, key=lambda c: (cls_counts[c], c))
 
-    # Count domain groups per class
     cls_domains: dict[int, list[str]] = defaultdict(list)
     for domain, cls in domain_labels.items():
         cls_domains[cls].append(domain)
@@ -324,7 +175,6 @@ def domain_grouped_split(
         report.reason   = reason
         train_idx, test_idx = _stratified_fallback(labels_list, test_size, random_state)
     else:
-        # --- Domain-grouped split ---
         rng = np.random.default_rng(random_state)
         test_domains:  set[str] = set()
         train_domains: set[str] = set()
@@ -346,7 +196,6 @@ def domain_grouped_split(
             if domain in test_domains
             for i in idxs
         ]
-        # Domains that ended up in neither (due to rounding) go to train
         neither = [
             i for domain, idxs in domain_to_indices.items()
             if domain not in train_domains and domain not in test_domains
@@ -363,7 +212,6 @@ def domain_grouped_split(
     report.n_train = len(train_idx)
     report.n_test  = len(test_idx)
 
-    # Compute per-class counts for report
     train_counts: dict[int, int] = defaultdict(int)
     test_counts:  dict[int, int] = defaultdict(int)
     for i in train_idx:
@@ -381,7 +229,6 @@ def _stratified_fallback(
     test_size: float,
     random_state: int,
 ) -> tuple[list[int], list[int]]:
-    """Balanced class-stratified index split (no sklearn dependency)."""
     import numpy as np
 
     arr     = np.array(labels)
@@ -400,25 +247,8 @@ def _stratified_fallback(
     return train_idx, test_idx
 
 
-# ---------------------------------------------------------------------------
-# Dataset summary
-# ---------------------------------------------------------------------------
-
-
 def dataset_summary(urls: Sequence[str], labels: Sequence[int]) -> str:
-    """
-    Return a plain-text summary of a URL dataset for logging and provenance.
 
-    Parameters
-    ----------
-    urls   : sequence of URL strings.
-    labels : corresponding integer labels.
-
-    Returns
-    -------
-    Multi-line string describing class balance, domain diversity, and TLD
-    distribution.
-    """
     from collections import Counter
 
     n = len(urls)
@@ -441,7 +271,7 @@ def dataset_summary(urls: Sequence[str], labels: Sequence[int]) -> str:
         f"  Legitimate (0) : {label_counts.get(0, 0)}",
         f"  Phishing   (1) : {label_counts.get(1, 0)}",
         f"  Distinct domains: {len(domain_set)}",
-        f"  Top TLDs: "
+        "  Top TLDs: "
         + ", ".join(f"{tld}({c})" for tld, c in top_tlds),
     ]
     return "\n".join(lines)

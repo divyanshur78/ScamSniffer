@@ -1,1 +1,0 @@
-# ScamSniffer — source package root

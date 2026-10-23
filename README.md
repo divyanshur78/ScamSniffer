@@ -1,96 +1,225 @@
-# ScamSniffer
+# ScamSniffer 🛡️
 
-> **⚠️ Disclaimer:** ScamSniffer is a research and educational tool. Predictions are
-> probabilistic and **are not guaranteed to be correct**. Do not rely solely on this
-> tool to make security decisions. Always apply human judgement and consult qualified
-> cybersecurity professionals.
+### AI-Powered Phishing Detection for URLs, Emails, SMS, and Chat Messages
 
-AI-powered phishing detection for suspicious URLs, emails, SMS, and chat messages
-using machine learning.
+ScamSniffer is a machine-learning-based cybersecurity project designed to identify potentially suspicious URLs and phishing-related messages. It combines URL feature extraction, text classification, input validation, and a Streamlit web interface to help users assess potential phishing threats.
+
+> ⚠️ **Disclaimer:** ScamSniffer is a research and educational project. Its predictions are probabilistic and are not guaranteed to be correct. Do not rely solely on this tool to make security decisions. Always apply human judgment and consult qualified cybersecurity professionals when necessary.
 
 ---
 
 ## Features
 
-- 🔗 **URL analysis** — entropy, TLD reputation, keyword heuristics, IP-hostname detection
-- 📧 **Email / SMS / chat classification** — TF-IDF + n-gram text pipeline
-- 🌐 **Streamlit web interface** — simple, browser-based UI with confidence scores
-- 📊 **Model evaluation** — precision, recall, F1-score, confusion matrix reports
-- 🔒 **Safe input handling** — length limits, type validation, no URL fetching
+- 🔗 **URL Phishing Detection:** Analyzes URL characteristics, including entropy, suspicious keywords, top-level domains, and IP-based hostnames.
+- 📧 **Message Classification:** Uses a TF-IDF and n-gram text pipeline to classify email, SMS, and chat messages.
+- 🌐 **Streamlit Web Interface:** Provides a browser-based interface for submitting URLs and messages for analysis.
+- 📊 **Model Evaluation:** Supports classification metrics, model comparison, and evaluation reports.
+- 🔒 **Input Validation:** Applies input validation and length limits to help handle potentially unsafe inputs.
+- 🧪 **Automated Testing:** Includes tests for detection logic, feature extraction, validation, model pipelines, and adversarial inputs.
+
+---
+
+## Technology Stack
+
+| Component | Technology |
+|---|---|
+| Programming Language | Python |
+| Machine Learning | scikit-learn |
+| Data Processing | pandas, NumPy |
+| Model Persistence | joblib |
+| Web Interface | Streamlit |
+| URL Analysis | tldextract, validators |
+| Testing | pytest, pytest-cov |
+| Code Quality | Ruff |
+
+---
 
 ## Project Structure
 
-```
+```text
 ScamSniffer/
-├── app/                    # Streamlit web interface
-├── src/                    # Core library
-│   ├── features/           # URL & text feature extractors
-│   └── models/             # sklearn pipeline wrapper
-├── scripts/                # Training CLI
-├── data/samples/           # Synthetic sample data for CI
-├── models/                 # Persisted model artefacts (git-ignored)
-├── reports/                # Evaluation plots & metrics (git-ignored)
-├── tests/                  # pytest unit tests
-└── docs/                   # Architecture & usage documentation
+├── app/
+│   └── main.py
+├── data/
+│   ├── README.md
+│   ├── raw/                 # Local training datasets; excluded from Git
+│   └── samples/
+│       ├── urls.csv
+│       └── messages.csv
+├── models/
+│   ├── url_model.joblib            # Active URL model
+│   ├── text_model.joblib           # Active text model
+│   └── url_model_phiusiil.joblib   # Experimental model
+├── reports/                 # Generated evaluation reports
+├── scripts/
+│   ├── train.py
+│   └── train_phiusiil.py
+├── src/
+│   ├── features/
+│   │   ├── text_features.py
+│   │   └── url_features.py
+│   ├── models/
+│   │   └── pipeline.py
+│   ├── data_utils.py
+│   ├── detector.py
+│   ├── evaluation.py
+│   ├── model_comparison.py
+│   └── validator.py
+├── tests/
+├── requirements.txt
+├── requirements-dev.txt
+├── pyproject.toml
+└── README.md
 ```
 
-## Quick Start
+**Note:** The active model files (`models/url_model.joblib` and `models/text_model.joblib`) are included in the repository. The experimental model (`models/url_model_phiusiil.joblib`), raw training datasets, and generated reports are excluded from Git. A fresh repository clone will include the active models but may not include the experimental model, raw datasets, or generated reports.
+---
 
-### 1. Install dependencies
+## Installation
+
+### 1. Clone the repository
 
 ```bash
+git clone <YOUR_GITHUB_REPOSITORY_URL>
+cd ScamSniffer
+```
+
+Replace `<YOUR_GITHUB_REPOSITORY_URL>` with the actual URL of your GitHub repository.
+
+### 2. Create a virtual environment
+
+On Windows PowerShell:
+
+```powershell
 python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# macOS / Linux
-source .venv/bin/activate
-
-pip install -r requirements-dev.txt
+.\.venv\Scripts\Activate.ps1
 ```
 
-### 2. Train the models
+If PowerShell prevents virtual environment activation, you can run the environment's Python executable directly.
 
-```bash
+### 3. Install dependencies
+
+Install the application dependencies:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+For development and testing, install the additional dependencies:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+```
+
+---
+
+## Model Setup and Training
+
+ScamSniffer currently uses two active model files:
+
+- `models/url_model.joblib`
+- `models/text_model.joblib`
+
+The active model files are included in the Git repository:
+
+- `models/url_model.joblib`
+- `models/text_model.joblib`
+
+No separate model download is required when cloning the repository normally. Ensure both files are present in the `models/` directory before running the application.
+
+The experimental model, `models/url_model_phiusiil.joblib`, is excluded from Git and is not required to run the application.
+
+Before running the application from a fresh clone, ensure the required model files are available in the `models/` directory.
+
+### Train with sample datasets
+
+The project provides a training script:
+
+```powershell
 python scripts/train.py --data-dir data/samples --output-dir models/
 ```
 
-### 3. Run the web app
+The bundled sample datasets are small synthetic examples intended for testing and continuous integration. They are not representative of real-world phishing data and should not be used as the sole basis for production training.
 
-```bash
-streamlit run app/main.py
+### Experimental PhiUSIIL model
+
+The project also includes `scripts/train_phiusiil.py` for experimentation with the PhiUSIIL phishing URL dataset.
+
+The experimental model is saved separately as `models/url_model_phiusiil.joblib`. It does not automatically replace the active URL model.
+
+Evaluate experimental models carefully before considering them for application use.
+
+---
+
+## Run the Application
+
+After installing dependencies and ensuring the active model files are available, start the Streamlit application:
+
+```powershell
+python -m streamlit run app/main.py
 ```
 
-### 4. Run the test suite
+Streamlit will display a local address in the terminal. Open that address in your browser to use ScamSniffer.
 
-```bash
-pytest --cov=src --cov-report=term-missing
+---
+
+## Run Tests
+
+Run the complete test suite:
+
+```powershell
+python -m pytest -q
 ```
 
-## Tech Stack
+To generate coverage information:
 
-| Layer | Technology |
-|-------|-----------|
-| Language | Python 3.10+ |
-| ML framework | scikit-learn |
-| Data | pandas, numpy |
-| Model persistence | joblib |
-| Web UI | Streamlit |
-| URL parsing | tldextract |
-| Input validation | validators |
-| Testing | pytest, pytest-cov |
-| Linting | Ruff |
+```powershell
+python -m pytest --cov=src --cov-report=term-missing
+```
 
-## Data
+**Development test status:** The project passed 676 automated tests in the development environment at the time of documentation. Results may change if the code, dependencies, or environment changes.
 
-See [`data/README.md`](data/README.md) for dataset provenance, labelling conventions,
-and recommended public phishing datasets for production training.
+---
 
-## Documentation
+## Data and Privacy
 
-- [`docs/architecture.md`](docs/architecture.md) — system design & data flow
-- [`docs/usage.md`](docs/usage.md) — detailed usage guide
-- [`docs/data_sources.md`](docs/data_sources.md) — data sourcing guidance
+The `data/samples/` directory contains small synthetic datasets used for testing and continuous integration.
 
-## Licence
+Refer to [`data/README.md`](data/README.md) for information about:
 
-MIT — see [LICENSE](LICENSE).
+- Dataset structure and label conventions
+- Data provenance and suggested public datasets
+- Training usage
+- Privacy and legal considerations
+
+Do not add personal, confidential, or sensitive information to project datasets or test fixtures without appropriate authorization.
+
+---
+
+## Limitations
+
+- Predictions do not guarantee that a URL or message is malicious or legitimate.
+- Detection quality depends on the training data, feature extraction, model design, and evaluation methodology.
+- Synthetic sample datasets are not sufficient to establish real-world detection performance.
+- Legitimate URLs or messages may be flagged incorrectly.
+- Phishing attempts may go undetected.
+- Experimental models require separate evaluation before use.
+- ScamSniffer is not a replacement for browser security protections, email security systems, or professional security analysis.
+
+---
+
+## Future Improvements
+
+Potential future improvements include:
+
+- Evaluation using larger, representative, independently labelled datasets
+- Improved detection of previously unseen phishing techniques
+- More comprehensive false-positive and false-negative analysis
+- Improved reproducibility of model training and evaluation
+- Clearer documentation of model performance and limitations
+
+---
+
+## Project Status
+
+ScamSniffer is a research and educational cybersecurity project. Further evaluation is required before relying on it in real-world security environments.

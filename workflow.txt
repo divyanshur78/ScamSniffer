@@ -1,0 +1,568 @@
+# ScamSniffer — AI-Based Phishing Detection System
+
+## 1. Project Overview
+
+ScamSniffer is an AI-based phishing detection project designed to help users identify potentially malicious URLs and suspicious messages.
+
+The system uses machine learning models to analyze URLs and text, helping users recognize common phishing and scam indicators before interacting with potentially dangerous content.
+
+The project uses Python and Streamlit to provide a user interface for phishing detection.
+
+### Main Objectives
+
+- Detect potentially malicious URLs.
+- Analyze suspicious messages and identify possible phishing attempts.
+- Provide understandable detection results.
+- Reduce the risk of users interacting with phishing links and scam messages.
+- Build a modular, testable, and maintainable cybersecurity application.
+- Establish a foundation for future improvements to detection accuracy and explainability.
+
+**Important:** ScamSniffer provides an automated risk assessment. Its results should not be treated as a guarantee that a URL or message is safe or malicious.
+
+---
+
+## 2. Current Project Status
+
+ScamSniffer already has an implemented application, active machine learning models, and an automated test suite.
+
+### Existing Components
+| Component | Current Status |
+|---|---|
+| Python application | Implemented |
+| Streamlit interface | Implemented |
+| URL detection model | Available |
+| Text detection model | Available |
+| Model loading | Tested successfully |
+| Detection logic | Implemented |
+| Automated tests | 676 tests passing in the last recorded run |
+| Experimental PhiUSIIL model | Trained separately; excluded from active detection |
+| Raw training dataset | Excluded from Git |
+| README documentation | Under review |
+| Git repository | Initialized |
+
+The application can be started using:
+
+```powershell
+python -m streamlit run app/main.py
+```
+
+Run the automated tests using:
+
+```powershell
+python -m pytest
+```
+
+The last recorded test result was **676 passed**. This result describes that test run and should be confirmed again after future code changes.
+
+### Active Model Files
+
+The application currently uses these model files:
+
+```text
+models/
+├── url_model.joblib
+└── text_model.joblib
+```
+
+The experimental model is stored separately:
+
+```text
+models/url_model_phiusiil.joblib
+```
+
+The experimental model is not part of the active detection workflow because earlier testing produced false positives on legitimate websites, including Amazon, Google, and Wikipedia.
+
+It should not replace the active URL model until it has been evaluated adequately.
+
+---
+
+## 3. Technology Stack
+
+The project uses the following technologies and libraries.
+
+| Technology | Purpose |
+|---|---|
+| Python | Main programming language |
+| Streamlit | User interface |
+| Scikit-learn | Machine learning functionality |
+| Pandas | Data handling |
+| NumPy | Numerical operations |
+| Joblib | Saving and loading trained models |
+| tldextract | Domain-related URL analysis support |
+| Validators | Input validation support |
+| Pytest | Automated testing |
+| Ruff | Python linting |
+| pytest-cov | Test coverage measurement |
+
+The project dependencies are maintained in:
+
+```text
+requirements.txt
+requirements-dev.txt
+```
+
+The production dependency file contains the application libraries. The development dependency file includes the production dependencies and development tools.
+
+---
+
+## 4. Current Project Structure
+
+The main project structure is organized as follows:
+
+```text
+ScamSniffer/
+│
+├── app/
+│   └── main.py
+│
+├── src/
+│   └── detector.py
+│
+├── models/
+│   ├── url_model.joblib
+│   ├── text_model.joblib
+│   └── url_model_phiusiil.joblib
+│
+├── scripts/
+│   ├── train.py
+│   └── train_phiusiil.py
+│
+├── data/
+│   ├── raw/
+│   └── samples/
+│
+├── reports/
+│
+├── tests/
+│
+├── requirements.txt
+├── requirements-dev.txt
+├── .gitignore
+└── README.md
+```
+
+This is a high-level representation of the project. Some directories may contain additional files or subdirectories.
+
+Only files that actually exist in the repository should be documented as implemented components.
+
+The experimental model and raw training datasets are kept separate from the active application artifacts.
+
+---
+
+## 5. System Architecture
+
+The current architecture can be understood through the following logical flow:
+
+```text
+                    USER
+                      |
+                      v
+             Streamlit Interface
+                app/main.py
+                      |
+                      v
+              Detection Component
+               src/detector.py
+                      |
+             +--------+--------+
+             |                 |
+             v                 v
+       URL Detection      Text Detection
+             |                 |
+             v                 v
+      Active URL Model   Active Text Model
+      url_model.joblib   text_model.joblib
+             |                 |
+             +--------+--------+
+                      |
+                      v
+             Detection Results
+                      |
+                      v
+               User Interface
+```
+
+This diagram represents the logical detection workflow. The exact function calls and internal processing steps depend on the current source code.
+
+### Main Components
+
+#### 5.1 Streamlit Interface
+
+The Streamlit application provides the user-facing interface.
+
+Its entry point is:
+
+```text
+app/main.py
+```
+
+The interface accepts user input and presents the detection results produced by the application's detection logic.
+
+#### 5.2 Detection Component
+
+The detection logic is maintained in:
+
+```text
+src/detector.py
+```
+
+This component contains detection-related logic, including text-verdict handling.
+
+For text detection, the current verdict logic considers both the model's prediction and certain message indicators.
+
+When urgency-related language and credential-request indicators are both present, the logic assigns a phishing verdict. Otherwise, the model's prediction is used to determine the verdict.
+
+This is a heuristic-based decision rule and should be evaluated against representative legitimate and phishing messages.
+
+#### 5.3 Active URL Model
+
+The active URL model is stored in:
+
+```text
+models/url_model.joblib
+```
+
+It is loaded successfully using Joblib.
+
+#### 5.4 Active Text Model
+
+The active text model is stored in:
+
+```text
+models/text_model.joblib
+```
+
+It is also loaded successfully using Joblib.
+
+The exact algorithms, training parameters, and feature configurations should be documented only after checking the corresponding training scripts and model implementation.
+
+---
+
+## 6. Model and Dataset Management
+
+ScamSniffer separates active application models from experimental models and raw training data.
+
+### 6.1 Active Models
+
+The following models are used by the application:
+
+```text
+models/url_model.joblib
+models/text_model.joblib
+```
+
+Both models were successfully loaded in the last recorded verification.
+
+### 6.2 Experimental Model
+
+The following model was trained using the PhiUSIIL dataset:
+
+```text
+models/url_model_phiusiil.joblib
+```
+
+It is currently excluded from active detection because previous testing showed false positives on legitimate websites.
+
+Further evaluation should consider:
+
+- Precision and recall.
+- False-positive and false-negative rates.
+- Performance on legitimate websites.
+- Performance on phishing URLs.
+- Performance on previously unseen samples.
+- Generalization to different types of URLs.
+- Appropriate decision thresholds.
+
+A model should not be promoted to production solely because it performs well on its training dataset.
+
+### 6.3 Raw Training Data
+
+Raw training datasets are stored under:
+
+```text
+data/raw/
+```
+
+The raw dataset currently associated with the PhiUSIIL experiment is:
+
+```text
+data/raw/PhiUSIIL_Phishing_URL_Dataset.csv
+```
+
+The dataset is excluded from Git because it is a large raw training artifact.
+
+Before redistributing any dataset, its licensing terms and usage conditions should be reviewed.
+
+### 6.4 Sample Data
+
+The `data/samples/` directory is intended for small datasets that support development and testing.
+
+The actual sample filenames, column names, label conventions, and training compatibility should be confirmed against the files and training scripts before they are documented as guaranteed interfaces.
+
+---
+
+## 7. Installation and Setup
+
+### Prerequisites
+
+Install a compatible Python version and Git.
+
+Use a terminal opened in the project directory.
+
+### Step 1: Open the Project Directory
+
+```powershell
+cd "C:\Users\V\OneDrive\Documents\ScamSniffer"
+```
+
+Replace this path if the project is stored somewhere else.
+
+### Step 2: Create a Virtual Environment
+
+```powershell
+python -m venv .venv
+```
+
+### Step 3: Activate the Virtual Environment
+
+For Windows PowerShell:
+
+```powershell
+.\.venv\Scripts\Activate.ps1
+```
+
+If PowerShell blocks activation, the environment can also be used without activation by running its Python executable directly.
+
+### Step 4: Install Dependencies
+
+Install the application dependencies:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+For development and testing, install the development dependencies:
+
+```powershell
+python -m pip install -r requirements-dev.txt
+```
+
+### Step 5: Run the Application
+
+```powershell
+python -m streamlit run app/main.py
+```
+
+Streamlit will display the local application address in the terminal.
+
+Open that address in a browser to use the application.
+
+---
+
+## 8. Running Tests
+
+Automated tests help verify that the application's components behave as expected.
+
+Run the complete test suite:
+
+```powershell
+python -m pytest
+```
+
+For a more detailed test report:
+
+```powershell
+python -m pytest -v
+```
+
+To measure test coverage, if the project's test configuration supports it:
+
+```powershell
+python -m pytest --cov=src --cov-report=term-missing
+```
+
+The last recorded test run completed with:
+
+```text
+676 passed
+```
+
+A passing test suite does not automatically establish real-world phishing detection accuracy. Model evaluation using representative data is also necessary.
+
+---
+
+## 9. Training and Model Evaluation
+
+Model training and evaluation should be performed separately from the application's normal detection workflow.
+
+The project contains training-related scripts, including:
+
+```text
+scripts/train.py
+scripts/train_phiusiil.py
+```
+
+The first script is associated with the main training workflow, while the second is associated with the separate PhiUSIIL experiment.
+
+Before running either script, inspect its arguments, input requirements, output paths, and training procedure.
+
+Do not assume that both scripts use the same datasets or produce interchangeable models.
+
+### Recommended Evaluation Metrics
+
+The following metrics are useful for phishing detection:
+
+**Accuracy:** The proportion of all predictions that are correct.
+
+**Precision:** The proportion of predicted phishing cases that are actually phishing.
+
+**Recall:** The proportion of actual phishing cases detected by the model.
+
+**F1-score:** A combined measure of precision and recall.
+
+**False-positive rate:** The proportion of legitimate samples incorrectly classified as phishing.
+
+**False-negative rate:** The proportion of phishing samples incorrectly classified as legitimate.
+
+For cybersecurity applications, false positives and false negatives should both be investigated. High accuracy alone may hide weaknesses in detection.
+
+Evaluation should use appropriate training and test separation to avoid misleading results caused by data leakage.
+
+---
+
+## 10. Security and Privacy Considerations
+
+ScamSniffer is intended to analyze URLs and text supplied for detection.
+
+### Safe Processing Principles
+
+- Treat user-provided URLs and messages as untrusted input.
+- Validate inputs before processing them.
+- Handle malformed input without crashing the application.
+- Avoid logging complete messages or sensitive information unnecessarily.
+- Do not expose local filesystem paths or internal error details to users.
+- Avoid executing content contained in suspicious messages.
+- Keep dependencies and model artifacts under version control and change review.
+- Test boundary conditions and malformed inputs.
+
+### External Network Requests
+
+The application should not automatically open suspicious URLs simply to determine whether they are malicious.
+
+Any future network-based analysis should be explicitly designed with safeguards against server-side request forgery, access to private network resources, unwanted redirects, and other risks.
+
+Whether the current implementation performs any DNS lookups, HTTP requests, or other network activity must be confirmed by inspecting the source code.
+
+### Input Size Limits
+
+Input length limits can help reduce resource exhaustion and improve reliability.
+
+The exact limits for URL and message inputs should be documented only after verifying the implementation.
+
+### Privacy
+
+Users should avoid submitting passwords, authentication tokens, private correspondence, financial information, or other sensitive data unless the application explicitly supports the required privacy and security protections.
+
+Data retention and logging practices should be reviewed before deploying the application for public use.
+
+---
+
+## 11. Current Limitations
+
+The current project should be treated as a machine-learning-assisted phishing detection tool rather than a complete security guarantee.
+
+Potential limitations include:
+
+- Legitimate websites may be incorrectly flagged.
+- New phishing techniques may not resemble the training examples.
+- Message wording can change the model's prediction.
+- Detection performance depends on the quality and representativeness of the training data.
+- A model's performance on one dataset may not generalize to real-world traffic.
+- The application may not identify every malicious URL or scam message.
+- Model predictions may require additional explanation to be useful to non-technical users.
+
+The active models should be evaluated periodically using fresh, representative samples.
+
+---
+
+## 12. Future Improvements
+
+Possible improvements include:
+
+### 12.1 Better Model Evaluation
+
+Create a repeatable evaluation workflow that reports precision, recall, F1-score, false-positive rate, and false-negative rate.
+
+### 12.2 Explainable Detection Results
+
+Provide understandable reasons for suspicious classifications, such as relevant URL characteristics or message indicators, when these explanations are supported by the actual detection logic.
+
+### 12.3 Improved Dataset Quality
+
+Evaluate additional legitimate and phishing samples while maintaining clear dataset provenance and licensing records.
+
+### 12.4 Model Comparison
+
+Compare candidate models against the existing active models using the same evaluation methodology.
+
+Do not replace an active model until the candidate demonstrates suitable performance on independent test data.
+
+### 12.5 User Interface Improvements
+
+Improve the clarity of detection results, input validation, accessibility, and error handling.
+
+### 12.6 Deployment Security
+
+Before public deployment, review dependency security, privacy, logging, resource limits, and protections against malicious input.
+
+### 12.7 Continuous Testing
+
+Run automated tests whenever code changes are made and add regression tests for bugs discovered during development.
+
+---
+
+## 13. Git and Artifact Management
+
+Git should contain the source code, documentation, tests, dependency files, and intentionally included model artifacts.
+
+Large raw training datasets and experimental artifacts should be managed separately when appropriate.
+
+The current `.gitignore` configuration excludes model artifacts by default, then explicitly allows the two active model files:
+
+```gitignore
+# ScamSniffer --- generated artefacts
+
+# Model files
+models/*.joblib
+
+# Include active ScamSniffer models in Git
+!models/url_model.joblib
+!models/text_model.joblib
+
+# Generated reports
+reports/*.png
+reports/*.json
+
+# Raw training datasets
+data/raw/
+```
+
+This configuration is intended to allow the active URL and text models to be included in Git while excluding the experimental model and raw training data.
+
+Git ignore rules do not remove files that are already tracked. Repository status should be checked before relying on these rules.
+
+If the active model files are committed, ensure that their size, licensing, and reproducibility are appropriate for the repository.
+
+---
+
+## 14. Project Status Summary
+
+ScamSniffer has an existing Streamlit application, active URL and text models, detection logic, and an automated test suite.
+
+The active models have been loaded successfully, and the last recorded test run reported 676 passing tests.
+
+The separate PhiUSIIL experiment remains excluded from active detection because of false positives on legitimate websites.
+
+The next development priorities are to verify model behavior on representative data, improve detection explanations, maintain regression tests, and document only those features that are confirmed in the source code.
+
+ScamSniffer is a continuing cybersecurity project intended to improve the identification of phishing URLs and suspicious messages through machine learning and careful software testing.

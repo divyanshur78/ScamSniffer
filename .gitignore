@@ -220,6 +220,15 @@ __marimo__/
 .streamlit/secrets.toml
 
 # ScamSniffer --- generated artefacts
+# Model files
 models/*.joblib
+
+# Include active ScamSniffer models in Git
+!models/url_model.joblib
+!models/text_model.joblib
+
 reports/*.png
 reports/*.json
+
+# ScamSniffer raw training datasets
+data/raw/

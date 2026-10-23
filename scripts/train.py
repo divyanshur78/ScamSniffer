@@ -1,43 +1,7 @@
-"""
-scripts/train.py
-================
-Training script for ScamSniffer URL and text classification models.
-
-Usage
------
-    python scripts/train.py [OPTIONS]
-
-Options
--------
-    --data-dir   PATH   Directory containing urls.csv and messages.csv
-                        (default: data/samples)
-    --output-dir PATH   Directory for saved model artefacts
-                        (default: models)
-    --report-dir PATH   Directory for evaluation JSON reports and confusion-
-                        matrix text files  (default: reports)
-    --random-state INT  Random seed for reproducibility  (default: 42)
-    --test-size  FLOAT  Fraction of data held out for evaluation (default: 0.25)
-    --help              Show this message and exit.
-
-Outputs
--------
-    <output-dir>/url_model.joblib      — trained URL pipeline
-    <output-dir>/text_model.joblib     — trained text pipeline
-    <report-dir>/url_evaluation.json   — URL model metrics
-    <report-dir>/text_evaluation.json  — text model metrics
-
-⚠️  Disclaimer
-    -----------
-    This script trains on the dataset supplied via --data-dir.
-    The bundled synthetic data under data/samples/ is NOT representative of
-    real-world phishing distributions.  Metrics produced from synthetic data
-    MUST NOT be cited as claims of production accuracy.
-
-⚠️  No external URLs are fetched at any point during training.
-"""
 
 from __future__ import annotations
 
+# ruff: noqa: E402
 import argparse
 import json
 import sys
@@ -48,62 +12,40 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import StratifiedShuffleSplit
 
-# ---------------------------------------------------------------------------
-# Make sure the project root is on sys.path when the script is run directly.
-# ---------------------------------------------------------------------------
+# Ruff: project-root setup must run before importing local modules.
+
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
-from src.data_utils import (  # noqa: E402
+from src.data_utils import (
     DeduplicationReport,
     DomainSplitReport,
     dataset_summary,
     deduplicate_urls,
     domain_grouped_split,
 )
-from src.evaluation import evaluate  # noqa: E402
-from src.features.text_features import extract_text_features  # noqa: E402
-from src.features.url_features import extract_url_features  # noqa: E402
-from src.model_comparison import (  # noqa: E402
-    ModelComparisonResult,
-    compare_url_models,
+from src.evaluation import evaluate
+from src.features.url_features import extract_url_features
+from src.model_comparison import (
     compare_text_models,
+    compare_url_models,
     print_comparison_table,
 )
-from src.models.pipeline import build_text_pipeline, build_url_pipeline  # noqa: E402
-
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+from src.models.pipeline import build_text_pipeline, build_url_pipeline
 
 URL_CSV = "urls.csv"
 MSG_CSV = "messages.csv"
-MIN_CLASS_COUNT = 2   # minimum samples per class to allow a train/test split
-DEFAULT_CV_FOLDS = 5  # default number of CV folds for model comparison
-
-
-# ---------------------------------------------------------------------------
-# Data loading & validation
-# ---------------------------------------------------------------------------
+MIN_CLASS_COUNT = 2
+DEFAULT_CV_FOLDS = 5
 
 
 def load_url_data(
     data_dir: Path,
     deduplicate: bool = True,
 ) -> tuple[list[dict], list[int], list[str], DeduplicationReport | None]:
-    """
-    Load, validate, and optionally deduplicate the URL dataset.
 
-    Returns a tuple of (feature_dicts, labels, raw_urls, dedup_report).
-    ``dedup_report`` is None when ``deduplicate=False``.
 
-    Raises
-    ------
-    FileNotFoundError  — if urls.csv is missing.
-    ValueError         — on schema violations, missing values, or
-                         insufficient class counts.
-    """
     csv_path = data_dir / URL_CSV
     if not csv_path.exists():
         raise FileNotFoundError(f"URL dataset not found: {csv_path}")
@@ -115,7 +57,7 @@ def load_url_data(
     _validate_min_class_counts(df["label"], source=str(csv_path))
 
     raw_urls   = df["url"].tolist()
-    labels_raw = [int(l) for l in df["label"].tolist()]
+    labels_raw = [int(label) for label in df["label"].tolist()]
 
     dedup_report: DeduplicationReport | None = None
     if deduplicate:
@@ -139,35 +81,33 @@ def load_url_data(
             feature_dicts.append(extract_url_features(raw_url))
         except ValueError:
             skipped_indices.append(i)
-            feature_dicts.append(None)  # type: ignore[arg-type]
+            feature_dicts.append(None)
 
     if skipped_indices:
         print(f"  ⚠  {len(skipped_indices)} URL(s) failed feature extraction and will be dropped.")
 
-    # Drop rows where feature extraction failed.
+
     valid_pairs = [
-        (f, l, u)
-        for f, l, u in zip(feature_dicts, labels_raw, raw_urls)
-        if f is not None
+        (features, label, url)
+        for features, label, url in zip(feature_dicts, labels_raw, raw_urls)
+        if features is not None
     ]
+
     if not valid_pairs:
         raise ValueError("No valid URL features could be extracted from the dataset.")
+
     features, labels, valid_urls = zip(*valid_pairs)
-    return list(features), [int(l) for l in labels], list(valid_urls), dedup_report
+    return (
+        list(features),
+        [int(label) for label in labels],
+        list(valid_urls),
+        dedup_report,
+    )
+
 
 
 def load_message_data(data_dir: Path) -> tuple[list[str], list[int]]:
-    """
-    Load and validate the messages dataset.
 
-    Returns a tuple of (texts, labels).
-
-    Raises
-    ------
-    FileNotFoundError  — if messages.csv is missing.
-    ValueError         — on schema violations, missing values, or
-                         insufficient class counts.
-    """
     csv_path = data_dir / MSG_CSV
     if not csv_path.exists():
         raise FileNotFoundError(f"Messages dataset not found: {csv_path}")
@@ -179,13 +119,9 @@ def load_message_data(data_dir: Path) -> tuple[list[str], list[int]]:
     _validate_min_class_counts(df["label"], source=str(csv_path))
 
     texts = df["text"].tolist()
-    labels = [int(l) for l in df["label"].tolist()]
+    labels = [int(label) for label in df["label"].tolist()]
     return texts, labels
 
-
-# ---------------------------------------------------------------------------
-# Validation helpers
-# ---------------------------------------------------------------------------
 
 
 def _validate_columns(
@@ -229,31 +165,17 @@ def _validate_min_class_counts(
             )
 
 
-# ---------------------------------------------------------------------------
-# Train / evaluate helpers
-# ---------------------------------------------------------------------------
-
-
 def _split_stratified(
     n: int,
     labels: list[int],
     test_size: float,
     random_state: int,
 ) -> tuple[list[int], list[int]]:
-    """
-    Return train and test index lists.
 
-    Falls back to a deterministic 50/50 numpy split without sklearn when
-    the dataset is too small for StratifiedShuffleSplit (< 2 samples per class
-    in either split).  This keeps the script functional on tiny demo datasets
-    while maintaining label balance.
-    """
     arr = np.array(labels)
     classes, counts = np.unique(arr, return_counts=True)
     min_count = counts.min()
 
-    # StratifiedShuffleSplit requires at least 2 samples of each class in
-    # both the train and test portions.
     n_test = max(1, int(round(n * test_size)))
     n_train = n - n_test
     min_test_per_class = max(1, int(round(min_count * test_size)))
@@ -272,7 +194,6 @@ def _split_stratified(
         train_idx, test_idx = next(sss.split(np.zeros(n), arr))
         return train_idx.tolist(), test_idx.tolist()
 
-    # Fallback: manual class-balanced split.
     rng = np.random.default_rng(random_state)
     train_idx, test_idx = [], []
     for cls in classes:
@@ -290,11 +211,7 @@ def _domain_split_or_fallback(
     test_size: float,
     random_state: int,
 ) -> tuple[list[int], list[int], DomainSplitReport]:
-    """
-    Attempt domain-grouped split; transparently fall back to stratified.
 
-    Returns (train_idx, test_idx, report).
-    """
     train_idx, test_idx, report = domain_grouped_split(
         urls, labels, test_size=test_size, random_state=random_state
     )
@@ -307,14 +224,8 @@ def train_url_model(
     test_size: float,
     random_state: int,
     urls: list[str] | None = None,
-) -> tuple[object, object]:  # (_UrlPipeline, EvaluationResult)
-    """
-    Train the URL pipeline; return (fitted_pipeline, eval_result).
+) -> tuple[object, object]:
 
-    When *urls* is provided, a domain-grouped split is attempted first (with
-    automatic fallback to stratified).  Without *urls*, falls back directly
-    to stratified splitting.
-    """
     if urls is not None:
         train_idx, test_idx, split_report = _domain_split_or_fallback(
             urls, labels, test_size, random_state
@@ -347,8 +258,7 @@ def train_text_model(
     labels: list[int],
     test_size: float,
     random_state: int,
-) -> tuple[object, object]:  # (_TextPipeline, EvaluationResult)
-    """Train the text pipeline; return (fitted_pipeline, eval_result)."""
+) -> tuple[object, object]:
     train_idx, test_idx = _split_stratified(
         len(texts), labels, test_size, random_state
     )
@@ -367,11 +277,6 @@ def train_text_model(
     return pipeline, result
 
 
-# ---------------------------------------------------------------------------
-# Save helpers
-# ---------------------------------------------------------------------------
-
-
 def save_model(pipeline: object, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     joblib.dump(pipeline, path)
@@ -382,11 +287,6 @@ def save_report(result: object, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result.as_dict(), indent=2), encoding="utf-8")
     print(f"  [saved] Report -> {path}")
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 
 def _build_parser() -> argparse.ArgumentParser:
@@ -426,7 +326,6 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def _wrap_comparison(results: list) -> object:
-    """Wrap a list of ModelComparisonResult into a saveable object."""
     class _ComparisonReport:
         def as_dict(self):
             return {"model_comparison": [r.as_dict() for r in results]}
@@ -434,7 +333,6 @@ def _wrap_comparison(results: list) -> object:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Entry point. Returns 0 on success, 1 on error."""
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -451,7 +349,6 @@ def main(argv: list[str] | None = None) -> int:
     print("  Metrics produced here do NOT reflect real-world accuracy.")
     print()
 
-    # --- URL model ---
     print("-- URL model -----------------------------")
     try:
         url_features, url_labels, url_raw, url_dedup = load_url_data(args.data_dir)
@@ -489,7 +386,6 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  FAILED - URL model: {exc}", file=sys.stderr)
         return 1
 
-    # --- Text model ---
     print()
     print("-- Text model ----------------------------")
     try:

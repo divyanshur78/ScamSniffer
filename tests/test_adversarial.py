@@ -1,41 +1,7 @@
-"""
-tests/test_adversarial.py
-=========================
-Adversarial, regression, and hard-negative tests for ScamSniffer.
-
-Philosophy
-----------
-These tests do NOT assert model prediction labels (which depend on
-the training data and could change as the dataset evolves).  Instead they:
-
-  1. Assert that known HEURISTIC WARNINGS fire for adversarial inputs.
-  2. Assert that the three-tier VERDICT logic is correct.
-  3. Assert that the amaz0n.com LOOKALIKE WARNING fires (regression test).
-  4. Assert that hard-negative legitimate URLs do NOT trigger false warnings.
-  5. Assert that adversarial obfuscation techniques each trigger the
-     appropriate heuristic flag.
-
-All tests are purely lexical — no model training is required.
-
-Coverage
---------
-  Lookalike/typosquatting      — amaz0n.com, paypa1.com, g00gle.com
-  IDN/punycode                 — xn-- prefixed hostnames
-  User-info / @ trick          — user@evil.com style
-  Brand in subdomain           — amazon.evil.com
-  Hyphen brand                 — paypal-secure.xyz
-  Digit substitution           — amaz0n, paypa1, g00gle
-  Deep subdomains              — a.b.c.d.evil.xyz
-  IP hosts                     — 192.168.0.1, 10.0.0.1
-  Non-standard port            — :8080, :9090
-  Redirect params              — ?redirect=, ?next=, ?url=
-  Encoded chars                — %2F, %40 in path
-  Verdict logic                — _verdict_for_url, _verdict_for_text
-  Hard negatives               — legitimate URLs with brand names
-"""
 
 from __future__ import annotations
 
+# ruff: noqa: E402
 import sys
 from pathlib import Path
 
@@ -50,17 +16,11 @@ from src.detector import (
     _VERDICT_BENIGN,
     _VERDICT_PHISHING,
     _url_warnings,
-    _text_warnings,
-    _verdict_for_url,
     _verdict_for_text,
+    _verdict_for_url,
 )
-from src.features.url_features import extract_url_features
 from src.features.text_features import extract_text_features
-
-
-# ---------------------------------------------------------------------------
-# Helper
-# ---------------------------------------------------------------------------
+from src.features.url_features import extract_url_features
 
 
 def _features(url: str) -> dict:
@@ -71,20 +31,7 @@ def _has_warning_containing(warnings: list[str], fragment: str) -> bool:
     return any(fragment.lower() in w.lower() for w in warnings)
 
 
-# ===========================================================================
-# Regression: amaz0n.com lookalike warning must fire
-# ===========================================================================
-
-
 class TestAmazonLookalikeRegression:
-    """
-    Regression tests ensuring that amaz0n.com (and similar typosquatting
-    domains) trigger the digit-substitution or brand-similarity warning.
-
-    The original model failed on amaz0n.com because it relied on is_https
-    and has_suspicious_tld as near-perfect proxies.  These tests ensure
-    the Phase 2 heuristics now catch it regardless of the model label.
-    """
 
     def test_amaz0n_digit_sub_feature_fires(self):
         feats = _features("http://amaz0n.com/account/login")
@@ -117,13 +64,11 @@ class TestAmazonLookalikeRegression:
 
     def test_amaz0n_brand_edit_dist_close(self):
         feats = _features("http://amaz0n.com/")
-        # edit distance from "amaz0n" to "amazon" is 1
         assert feats["brand_min_edit_dist"] <= 2
 
     def test_amaz0n_brand_edit_dist_warning_fires(self):
         feats    = _features("http://amaz0n.com/")
         warnings = _url_warnings(feats, "http://amaz0n.com/")
-        # Either digit-sub or edit-distance warning must fire
         has_relevant = (
             _has_warning_containing(warnings, "digit") or
             _has_warning_containing(warnings, "similar") or
@@ -131,11 +76,6 @@ class TestAmazonLookalikeRegression:
             _has_warning_containing(warnings, "brand")
         )
         assert has_relevant, f"No brand/typosquatting warning for amaz0n.com. Warnings: {warnings}"
-
-
-# ===========================================================================
-# IDN / punycode
-# ===========================================================================
 
 
 class TestIdnPunycode:
@@ -161,11 +101,6 @@ class TestIdnPunycode:
         assert feats["is_idn"] == 1
 
 
-# ===========================================================================
-# User-info / @ authority trick
-# ===========================================================================
-
-
 class TestUserInfoTrick:
     def test_at_in_authority_feature(self):
         feats = _features("http://victim@evil.com/login")
@@ -183,11 +118,6 @@ class TestUserInfoTrick:
         feats    = _features("https://www.amazon.com/cart")
         warnings = _url_warnings(feats, "https://www.amazon.com/cart")
         assert not _has_warning_containing(warnings, "user-info")
-
-
-# ===========================================================================
-# Brand in subdomain
-# ===========================================================================
 
 
 class TestBrandInSubdomain:
@@ -213,11 +143,6 @@ class TestBrandInSubdomain:
         assert feats["brand_in_subdomain"] == 1
 
 
-# ===========================================================================
-# Hyphen brand
-# ===========================================================================
-
-
 class TestHyphenBrand:
     def test_paypal_hyphen_fires(self):
         feats = _features("http://paypal-secure.xyz/verify")
@@ -239,12 +164,6 @@ class TestHyphenBrand:
         feats = _features("https://www.paypal.com/us/home")
         assert feats["has_hyphen_brand"] == 0
 
-
-# ===========================================================================
-# IP host
-# ===========================================================================
-
-
 class TestIpHost:
     def test_ipv4_feature_fires(self):
         feats = _features("http://192.168.0.1/admin/login")
@@ -258,8 +177,7 @@ class TestIpHost:
         )
 
     def test_ipv4_high_conf_heuristic(self):
-        # is_ip_host is in _HIGH_CONF_HEURISTICS — should trigger PHISHING verdict
-        # even if model says label=0
+
         feats  = _features("http://192.168.0.1/admin/login")
         verdict = _verdict_for_url(0, feats)
         assert verdict == _VERDICT_PHISHING
@@ -267,11 +185,6 @@ class TestIpHost:
     def test_normal_domain_no_ip_flag(self):
         feats = _features("https://www.amazon.com/")
         assert feats["is_ip_host"] == 0
-
-
-# ===========================================================================
-# Non-standard port
-# ===========================================================================
 
 
 class TestNonStandardPort:
@@ -293,11 +206,6 @@ class TestNonStandardPort:
     def test_port_80_not_non_std(self):
         feats = _features("http://www.example.com:80/")
         assert feats["has_non_std_port"] == 0
-
-
-# ===========================================================================
-# Redirect parameters
-# ===========================================================================
 
 
 class TestRedirectParam:
@@ -322,11 +230,6 @@ class TestRedirectParam:
         assert feats["has_redirect_param"] == 0
 
 
-# ===========================================================================
-# Encoded characters
-# ===========================================================================
-
-
 class TestEncodedChars:
     def test_percent_encoded_path_fires(self):
         feats = _features("http://evil.xyz/%2Fadmin%2Flogin")
@@ -345,12 +248,6 @@ class TestEncodedChars:
         feats = _features("https://www.python.org/downloads/")
         assert feats["has_encoded_chars"] == 0
 
-
-# ===========================================================================
-# Deep subdomain
-# ===========================================================================
-
-
 class TestDeepSubdomain:
     def test_deeply_nested_subdomain_warning(self):
         url      = "http://a.b.c.d.evil.xyz/login"
@@ -363,12 +260,6 @@ class TestDeepSubdomain:
     def test_subdomain_depth_feature(self):
         feats = _features("http://a.b.c.d.evil.xyz/")
         assert feats["subdomain_depth"] >= 3
-
-
-# ===========================================================================
-# Three-tier verdict logic
-# ===========================================================================
-
 
 class TestVerdictForUrl:
     def test_label_1_gives_phishing_verdict(self):
@@ -390,7 +281,6 @@ class TestVerdictForUrl:
 
     def test_clean_url_label_0_gives_benign_verdict(self):
         feats = _features("https://www.python.org/downloads/")
-        # Assuming no high-conf heuristics fire for python.org
         verdict = _verdict_for_url(0, feats)
         assert verdict == _VERDICT_BENIGN
 
@@ -418,7 +308,6 @@ class TestVerdictForText:
         text  = "URGENT: verify your password immediately to avoid account suspension!"
         feats = extract_text_features(text, input_type="email")
         verdict = _verdict_for_text(0, feats)
-        # Both urgency and credential request should be present
         if feats.get("urgency_term_count", 0) >= 1 and feats.get("credential_req_count", 0) >= 1:
             assert verdict == _VERDICT_PHISHING
 
@@ -428,24 +317,12 @@ class TestVerdictForText:
         assert _verdict_for_text(0, feats) == _VERDICT_BENIGN
 
     def test_urgency_alone_label_0_gives_benign(self):
-        # Urgency alone without credential request should NOT trigger phishing verdict
         text  = "URGENT: the server is down!"
         feats = extract_text_features(text, input_type="email")
         if feats.get("credential_req_count", 0) == 0:
             assert _verdict_for_text(0, feats) == _VERDICT_BENIGN
 
-
-# ===========================================================================
-# Hard negatives — legitimate URLs that must NOT trigger false alarms
-# ===========================================================================
-
-
 class TestHardNegativesUrl:
-    """
-    Legitimate URLs that contain brand names, security-related keywords, or
-    other potentially ambiguous patterns.  None of these should trigger the
-    high-confidence structural heuristics.
-    """
 
     @pytest.mark.parametrize("url", [
         "https://www.amazon.com/gp/help/customer/display.html",
@@ -477,15 +354,12 @@ class TestHardNegativesUrl:
         )
 
     def test_office365_no_digit_sub(self):
-        # office365 should NOT trigger digit substitution false positive
         feats = _features("https://www.office365.com/")
         assert feats["has_digit_sub_in_domain"] == 0, (
             "office365 must not trigger digit-substitution false positive"
         )
 
     def test_krebs0nsecurity_no_digit_sub(self):
-        # krebs0nsecurity.com - the '0' is in 'krebs0n', not a brand name substitution
-        # This depends on brand proximity guard in url_features — just check no crash
         feats = _features("https://www.krebs0nsecurity.com/")
         assert isinstance(feats["has_digit_sub_in_domain"], int)
 
@@ -498,12 +372,6 @@ class TestHardNegativesUrl:
         feats    = _features("https://www.amazon.com/")
         warnings = _url_warnings(feats, "https://www.amazon.com/")
         assert not _has_warning_containing(warnings, "HTTP, not HTTPS")
-
-
-# ===========================================================================
-# Hard negatives — legitimate messages
-# ===========================================================================
-
 
 class TestHardNegativesText:
     @pytest.mark.parametrize("text", [
@@ -530,23 +398,14 @@ class TestHardNegativesText:
         feats = extract_text_features(text, input_type="email")
         assert feats.get("credential_req_count", 0) == 0
 
-
-# ===========================================================================
-# Adversarial combinations
-# ===========================================================================
-
-
 class TestAdversarialCombinations:
     def test_https_phishing_domain_still_warns(self):
-        """HTTPS alone must not suppress warnings for clearly malicious patterns."""
         url   = "https://paypa1-secure.xyz/verify?update=password"
         feats = _features(url)
         warnings = _url_warnings(feats, url)
-        # Should have at least one warning even though HTTPS
         assert len(warnings) > 0
 
     def test_com_tld_phishing_still_warns_on_digit_sub(self):
-        """.com TLD alone must not suppress digit-substitution warnings."""
         url   = "http://amaz0n.com/account/login"
         feats = _features(url)
         warnings = _url_warnings(feats, url)
@@ -559,7 +418,6 @@ class TestAdversarialCombinations:
         )
 
     def test_multiple_signals_generate_multiple_warnings(self):
-        """A URL with many red flags should produce many warnings."""
         url   = "http://amaz0n.attacker-login.tk:8080/verify?redirect=bank"
         feats = _features(url)
         warnings = _url_warnings(feats, url)
@@ -568,7 +426,6 @@ class TestAdversarialCombinations:
         )
 
     def test_clean_url_minimal_warnings(self):
-        """A well-known legitimate URL should generate at most 1 warning."""
         url      = "https://www.python.org/downloads/"
         feats    = _features(url)
         warnings = _url_warnings(feats, url)

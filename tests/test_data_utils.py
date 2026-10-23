@@ -1,29 +1,15 @@
-"""
-tests/test_data_utils.py
-========================
-Unit tests for src/data_utils.py.
-
-Coverage
---------
-  deduplicate_urls          — exact dups, conflicting labels, near-dups, clean data
-  domain_grouped_split      — normal split, fallback, singleton domains, report fields
-  _registered_domain        — normal URLs, IPs, localhost, malformed
-  _normalise_url            — scheme stripping, case folding, slash trimming
-  dataset_summary           — structure, no crash on edge cases
-"""
 
 from __future__ import annotations
 
+# ruff: noqa: E402
 import sys
 from pathlib import Path
-
-import pytest
 
 _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from src.data_utils import (
+from src.data_utils import (  #noqa: E402
     DeduplicationReport,
     DomainSplitReport,
     _normalise_url,
@@ -33,11 +19,6 @@ from src.data_utils import (
     deduplicate_urls,
     domain_grouped_split,
 )
-
-
-# ===========================================================================
-# _registered_domain
-# ===========================================================================
 
 
 class TestRegisteredDomain:
@@ -54,13 +35,11 @@ class TestRegisteredDomain:
         assert _registered_domain("http://secure-paypal.xyz/verify") == "secure-paypal.xyz"
 
     def test_ip_address_returns_something(self):
-        # tldextract splits IPs oddly but should not crash
         result = _registered_domain("http://192.168.0.1/path")
         assert isinstance(result, str)
 
     def test_localhost_returns_empty(self):
         result = _registered_domain("http://localhost/admin")
-        # tldextract may or may not give a result for localhost; just no crash
         assert isinstance(result, str)
 
     def test_bare_domain(self):
@@ -71,12 +50,6 @@ class TestRegisteredDomain:
 
     def test_bad_url_returns_empty(self):
         assert _registered_domain("not a url at all!!!") == ""
-
-
-# ===========================================================================
-# _normalise_url
-# ===========================================================================
-
 
 class TestNormaliseUrl:
     def test_strips_https_scheme(self):
@@ -101,12 +74,6 @@ class TestNormaliseUrl:
         a = _normalise_url("https://AMAZON.COM/")
         b = _normalise_url("http://amazon.com")
         assert a == b
-
-
-# ===========================================================================
-# deduplicate_urls
-# ===========================================================================
-
 
 class TestDeduplicateUrlsClean:
     def test_clean_data_unchanged(self):
@@ -191,7 +158,6 @@ class TestDeduplicateUrlsNearDuplicates:
         urls   = ["https://amazon.com", "http://amazon.com/"]
         labels = [0, 0]
         clean_urls, _, report = deduplicate_urls(urls, labels)
-        # Near-dups NOT removed — only reported
         assert len(clean_urls) == 2
         assert len(report.near_duplicate_pairs) >= 1
 
@@ -205,11 +171,9 @@ class TestDeduplicateUrlsNearDuplicates:
             assert a != b
 
     def test_identical_exact_not_near_duplicate(self):
-        # Exact duplicates are removed before near-dup check
         urls   = ["https://a.com", "https://a.com"]
         labels = [0, 0]
         clean_urls, _, report = deduplicate_urls(urls, labels)
-        # After removing the exact dup only 1 remains — no near-dup pairs possible
         assert len(clean_urls) == 1
 
     def test_distinct_urls_no_near_duplicate(self):
@@ -233,13 +197,7 @@ class TestDeduplicateUrlsAsDict:
     def test_as_dict_serialisable(self):
         import json
         _, _, report = deduplicate_urls(["https://a.com", "https://a.com"], [0, 0])
-        json.dumps(report.as_dict())  # must not raise
-
-
-# ===========================================================================
-# _stratified_fallback
-# ===========================================================================
-
+        json.dumps(report.as_dict())
 
 class TestStratifiedFallback:
     def test_returns_two_lists(self):
@@ -257,7 +215,7 @@ class TestStratifiedFallback:
         labels = [0] * 20 + [1] * 20
         train, test = _stratified_fallback(labels, 0.25, 42)
         ratio = len(test) / len(labels)
-        assert 0.15 < ratio < 0.40  # allow rounding slack
+        assert 0.15 < ratio < 0.40
 
     def test_both_classes_in_test(self):
         labels = [0] * 10 + [1] * 10
@@ -272,13 +230,7 @@ class TestStratifiedFallback:
         assert t1 == t2
 
 
-# ===========================================================================
-# domain_grouped_split
-# ===========================================================================
-
-
 def _make_urls_labels(n_per_class: int = 10) -> tuple[list[str], list[int]]:
-    """Generate a small synthetic URL+label list with diverse domains."""
     legit = [
         "https://www.amazon.com/", "https://www.google.com/",
         "https://www.paypal.com/", "https://www.microsoft.com/",
@@ -344,13 +296,11 @@ class TestDomainGroupedSplitNormal:
 
 
 class TestDomainGroupedSplitFallback:
-    """When there are too few domains per class, fallback is triggered."""
 
     def test_tiny_dataset_falls_back(self):
         urls   = ["https://a.com", "http://b.com"]
         labels = [0, 1]
         _, _, report = domain_grouped_split(urls, labels, test_size=0.5, random_state=42)
-        # With only 1 domain per class, must fall back
         assert report.strategy == "stratified_fallback"
 
     def test_fallback_reason_nonempty(self):
@@ -378,8 +328,6 @@ class TestDomainGroupedSplitDeterministic:
         urls, labels = _make_urls_labels(10)
         tr1, _, _ = domain_grouped_split(urls, labels, test_size=0.25, random_state=1)
         tr2, _, _ = domain_grouped_split(urls, labels, test_size=0.25, random_state=2)
-        # Not guaranteed to differ but very likely with 20 URLs
-        # Just test they run without error
         assert isinstance(tr1, list)
         assert isinstance(tr2, list)
 
@@ -404,12 +352,7 @@ class TestDomainSplitReportAsDict:
         _, _, report = domain_grouped_split(
             *_make_urls_labels(10), test_size=0.25, random_state=42
         )
-        json.dumps(report.as_dict())  # must not raise
-
-
-# ===========================================================================
-# dataset_summary
-# ===========================================================================
+        json.dumps(report.as_dict())
 
 
 class TestDatasetSummary:
@@ -429,8 +372,8 @@ class TestDatasetSummary:
         urls   = ["https://a.com"] * 3 + ["http://b.xyz"] * 2
         labels = [0, 0, 0, 1, 1]
         result = dataset_summary(urls, labels)
-        assert "3" in result  # legitimate count
-        assert "2" in result  # phishing count
+        assert "3" in result
+        assert "2" in result
 
     def test_multiline(self):
         urls   = ["https://amazon.com", "http://phish.xyz/login"]
